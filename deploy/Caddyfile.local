@@ -1,0 +1,51 @@
+{
+	auto_https off
+	admin off
+}
+http://localhost:8093 {
+	handle /shirin/api/* {
+		reverse_proxy localhost:8083
+	}
+	handle /shirin/webhooks/* {
+		reverse_proxy localhost:8083
+	}
+	handle /shirin/api {
+		reverse_proxy localhost:8083
+	}
+	handle /shirin {
+		redir /shirin/ 308
+	}
+	handle /shirin/assets/* {
+		uri strip_prefix /shirin
+		root * {$SHIRIN_PROJECT_ROOT}/user_panel/dist
+		file_server
+	}
+	handle /shirin/* {
+		uri strip_prefix /shirin
+		root * {$SHIRIN_PROJECT_ROOT}/user_panel/dist
+		try_files {path} /index.html
+		file_server
+	}
+}
+http://localhost:8094 {
+	handle /shirin/api/* {
+		reverse_proxy localhost:8083
+	}
+	handle /shirin/api {
+		reverse_proxy localhost:8083
+	}
+	handle /shirin {
+		redir /shirin/ 308
+	}
+	handle /shirin/assets/* {
+		uri strip_prefix /shirin
+		root * {$SHIRIN_PROJECT_ROOT}/admin_panel/dist
+		file_server
+	}
+	handle /shirin/* {
+		uri strip_prefix /shirin
+		root * {$SHIRIN_PROJECT_ROOT}/admin_panel/dist
+		try_files {path} /index.html
+		file_server
+	}
+}

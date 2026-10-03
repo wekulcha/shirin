@@ -9,14 +9,14 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, Response
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.models.refresh_session import RefreshSession
 from app.models.user import User
 
-REFRESH_COOKIE_NAME = "kulcha_market_refresh_token"
+REFRESH_COOKIE_NAME = "shirin_refresh_token"
 
 
 def utcnow() -> datetime:
@@ -48,10 +48,6 @@ def _get_access_secret() -> str:
     settings = get_settings()
     if settings.auth_access_secret:
         return settings.auth_access_secret
-    if settings.internal_api_secret:
-        return settings.internal_api_secret
-    if settings.user_bot_token:
-        return settings.user_bot_token
     raise HTTPException(503, "Auth access secret is not configured")
 
 
@@ -63,6 +59,7 @@ def create_access_token(user_id: int) -> tuple[str, datetime]:
     payload = {
         "sub": str(user_id),
         "typ": "access",
+        "iss": "shirin",
         "iat": int(now.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
@@ -87,7 +84,8 @@ def verify_access_token(token: str) -> int | None:
             return None
 
         payload = json.loads(_base64url_decode(encoded_payload))
-        if payload.get("typ") != "access":
+        header = json.loads(_base64url_decode(encoded_header))
+        if header.get("alg") != "HS256" or payload.get("typ") != "access" or payload.get("iss") != "shirin":
             return None
         exp = payload.get("exp")
         sub = payload.get("sub")
@@ -122,7 +120,7 @@ async def get_user_from_bearer(db: AsyncSession, authorization: str | None) -> U
     if not user:
         raise HTTPException(401, "User not found for access token")
     if not user.is_active:
-        raise HTTPException(403, "Аккаунт отключён")
+        raise HTTPException(403, "account_disabled")
     return user
 
 
@@ -138,7 +136,7 @@ async def ensure_customer(db: AsyncSession, telegram_id: int, username: str | No
         id=telegram_id,
         username=username or f"tg_{telegram_id}",
         phone=f"tg-{telegram_id}",
-        registered_at=datetime.now(),
+        registered_at=utcnow_naive(),
     )
     db.add(user)
     await db.flush()
@@ -169,7 +167,7 @@ async def rotate_refresh_session(
 ) -> tuple[User, str, datetime] | None:
     now = utcnow_naive()
     result = await db.execute(
-        select(RefreshSession).where(RefreshSession.token_hash == _hash_refresh_token(raw_token))
+        select(RefreshSession).where(RefreshSession.token_hash == _hash_refresh_token(raw_token)).with_for_update(of=RefreshSession)
     )
     session = result.scalars().first()
     if not session:
@@ -177,8 +175,13 @@ async def rotate_refresh_session(
     if session.revoked_at is not None or session.expires_at <= now:
         return None
 
-    session.revoked_at = now
-    session.last_used_at = now
+    claimed = await db.execute(
+        update(RefreshSession)
+        .where(RefreshSession.id == session.id, RefreshSession.revoked_at.is_(None))
+        .values(revoked_at=now, last_used_at=now)
+    )
+    if claimed.rowcount != 1:
+        return None
     refresh_token, refresh_expires_at = await create_refresh_session(db, session.user_id)
 
     result = await db.execute(select(User).where(User.id == session.user_id))
@@ -193,9 +196,7 @@ async def rotate_refresh_session(
 async def revoke_refresh_session(db: AsyncSession, raw_token: str | None) -> None:
     if not raw_token:
         return
-    result = await db.execute(
-        select(RefreshSession).where(RefreshSession.token_hash == _hash_refresh_token(raw_token))
-    )
+    result = await db.execute(select(RefreshSession).where(RefreshSession.token_hash == _hash_refresh_token(raw_token)).with_for_update())
     session = result.scalars().first()
     if session and session.revoked_at is None:
         session.revoked_at = utcnow_naive()
@@ -213,7 +214,7 @@ def set_refresh_cookie(response: Response, raw_token: str, expires_at: datetime)
         secure=settings.auth_cookie_secure,
         samesite="lax",
         domain=settings.auth_cookie_domain or None,
-        path="/api/v1/auth",
+        path="/shirin/api/auth",
         max_age=max_age,
     )
 
@@ -223,7 +224,7 @@ def clear_refresh_cookie(response: Response) -> None:
     response.delete_cookie(
         key=REFRESH_COOKIE_NAME,
         domain=settings.auth_cookie_domain or None,
-        path="/api/v1/auth",
+        path="/shirin/api/auth",
         secure=settings.auth_cookie_secure,
         samesite="lax",
     )

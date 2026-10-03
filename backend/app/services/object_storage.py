@@ -28,20 +28,19 @@ class ObjectStorageService:
         self._public_base_url = settings.object_storage_public_base_url.strip().rstrip("/")
 
         missing = [
-            name for name, value in (
-                ("MARKET_OBJECT_STORAGE_ENDPOINT", settings.object_storage_endpoint),
-                ("MARKET_OBJECT_STORAGE_REGION", settings.object_storage_region),
-                ("MARKET_OBJECT_STORAGE_BUCKET", settings.object_storage_bucket),
-                ("MARKET_OBJECT_STORAGE_ACCESS_KEY_ID", settings.object_storage_access_key_id),
-                ("MARKET_OBJECT_STORAGE_SECRET_ACCESS_KEY", settings.object_storage_secret_access_key),
-                ("MARKET_OBJECT_STORAGE_PUBLIC_BASE_URL", settings.object_storage_public_base_url),
+            name
+            for name, value in (
+                ("SHIRIN_OBJECT_STORAGE_ENDPOINT", settings.object_storage_endpoint),
+                ("SHIRIN_OBJECT_STORAGE_REGION", settings.object_storage_region),
+                ("SHIRIN_OBJECT_STORAGE_BUCKET", settings.object_storage_bucket),
+                ("SHIRIN_OBJECT_STORAGE_ACCESS_KEY_ID", settings.object_storage_access_key_id),
+                ("SHIRIN_OBJECT_STORAGE_SECRET_ACCESS_KEY", settings.object_storage_secret_access_key),
+                ("SHIRIN_OBJECT_STORAGE_PUBLIC_BASE_URL", settings.object_storage_public_base_url),
             )
             if not value.strip()
         ]
         if missing:
-            raise ObjectStorageNotConfiguredError(
-                f"Object Storage is not configured. Missing: {', '.join(missing)}"
-            )
+            raise ObjectStorageNotConfiguredError(f"Object Storage is not configured. Missing: {', '.join(missing)}")
 
         session = boto3.session.Session(
             aws_access_key_id=settings.object_storage_access_key_id,

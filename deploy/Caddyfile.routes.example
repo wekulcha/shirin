@@ -1,0 +1,47 @@
+# Merge these handles into the existing domain blocks, BEFORE their root proxy.
+# Keep the /shirin prefix; backend routes already contain it.
+market.wekulcha.ru {
+	encode zstd gzip
+	request_body {
+		max_size 9MB
+	}
+	handle /shirin/api/* {
+		reverse_proxy shirin-backend:8000
+	}
+	handle /shirin/api {
+		reverse_proxy shirin-backend:8000
+	}
+	handle /shirin/webhooks/* {
+		reverse_proxy shirin-backend:8000
+	}
+	handle /shirin {
+		redir /shirin/ 308
+	}
+	handle /shirin/* {
+		reverse_proxy shirin-user-panel:80
+	}
+	handle {
+		reverse_proxy kulcha-market-user-panel:80
+	}
+}
+adminmarket.wekulcha.online {
+	encode zstd gzip
+	request_body {
+		max_size 9MB
+	}
+	handle /shirin/api/* {
+		reverse_proxy shirin-backend:8000
+	}
+	handle /shirin/api {
+		reverse_proxy shirin-backend:8000
+	}
+	handle /shirin {
+		redir /shirin/ 308
+	}
+	handle /shirin/* {
+		reverse_proxy shirin-admin-panel:80
+	}
+	handle {
+		reverse_proxy kulcha-market-admin-panel:80
+	}
+}

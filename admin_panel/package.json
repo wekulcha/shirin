@@ -1,5 +1,5 @@
 {
-  "name": "shirin-mini-app",
+  "name": "shirin-admin-panel",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",

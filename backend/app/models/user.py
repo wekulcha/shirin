@@ -18,3 +18,4 @@ class User(Base):
     address: Mapped[str | None] = mapped_column(String, nullable=True)
     registered_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    language: Mapped[str] = mapped_column(String(2), nullable=False, default="ru", server_default="ru")

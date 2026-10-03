@@ -1,0 +1,62 @@
+name: shirin
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: shirin
+      POSTGRES_USER: shirin
+      POSTGRES_PASSWORD: ${SHIRIN_POSTGRES_PASSWORD:?Set SHIRIN_POSTGRES_PASSWORD}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U shirin -d shirin]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  migrate:
+    build: {context: ., dockerfile: deploy/backend.Dockerfile}
+    env_file: .env
+    command: [alembic, upgrade, head]
+    depends_on: {postgres: {condition: service_healthy}}
+  backend:
+    build: {context: ., dockerfile: deploy/backend.Dockerfile}
+    container_name: shirin-backend
+    restart: unless-stopped
+    env_file: .env
+    volumes: [media_data:/app/uploads]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+    expose: ['8000']
+    networks: [default, gateway]
+  worker:
+    build: {context: ., dockerfile: deploy/backend.Dockerfile}
+    restart: unless-stopped
+    env_file: .env
+    command: [python, -m, app.services.notifications]
+    volumes: [media_data:/app/uploads]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+  bot:
+    build: {context: ., dockerfile: deploy/backend.Dockerfile}
+    restart: unless-stopped
+    env_file: .env
+    command: [python, -m, app.bot]
+    volumes: [media_data:/app/uploads]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+  user_panel:
+    build: {context: ., dockerfile: deploy/user-panel.Dockerfile}
+    container_name: shirin-user-panel
+    restart: unless-stopped
+    expose: ['80']
+    networks: [default, gateway]
+  admin_panel:
+    build: {context: ., dockerfile: deploy/admin-panel.Dockerfile}
+    container_name: shirin-admin-panel
+    restart: unless-stopped
+    expose: ['80']
+    networks: [default, gateway]
+networks:
+  gateway:
+    external: true
+    name: ${SHIRIN_GATEWAY_NETWORK:-kulcha-market_default}
+volumes:
+  postgres_data:
+  media_data:

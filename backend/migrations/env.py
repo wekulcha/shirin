@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from app.config import get_settings  # noqa: E402
 from app.database import Base  # noqa: E402
 from app.models import *  # noqa: E402, F401, F403
 
@@ -21,7 +22,7 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-db_url = os.environ.get("MARKET_DATABASE_URL")
+db_url = get_settings().database_url
 if db_url:
     config.set_main_option("sqlalchemy.url", db_url)
 

@@ -5,6 +5,11 @@ declare global {
         ready: () => void;
         expand?: () => void;
         requestContact?: (callback?: (shared: boolean) => void) => void;
+        LocationManager?: {
+          isLocationAvailable: boolean;
+          init: (callback: () => void) => void;
+          getLocation: (callback: (location: { latitude: number; longitude: number } | null) => void) => void;
+        };
         initData?: string;
         /** Парсированные поля initData (в т.ч. start_param для deep link). */
         initDataUnsafe?: {
