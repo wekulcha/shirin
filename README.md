@@ -80,6 +80,7 @@ TEST_DATABASE_URL=postgresql+asyncpg://TEST_USER@127.0.0.1:5544/shirin_test .ven
 - [Telegram, polling/webhook, группа](docs/telegram.md).
 - [Отдельная суперадминка: вход, права и удаление интеграции](docs/superadmin.md).
 - [Compose, Caddy и два существующих домена](docs/deployment.md).
+- [Яндекс Облако: новая ВМ, поля консоли, .env и запуск](docs/yandex-cloud.md).
 - [Этапы реализации](docs/implementation-progress.md).
 
 Mini App: `https://market.wekulcha.ru/shirin/`; панель сотрудников: `https://adminmarket.wekulcha.online/shirin/`; суперадминка: `https://adminmarket.wekulcha.online/shirin/superadmin/`. Общий домен может обслуживаться gateway, а данные и авторизация принадлежат Shirin. На production приложение ещё не размещено. Реальные Telegram/S3/HTTPS проверки требуют соответствующего тестового окружения; Docker daemon здесь выключен.

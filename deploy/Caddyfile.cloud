@@ -1,0 +1,58 @@
+# Hostnames contain no scheme, port or path. Both must resolve to this VM.
+{$SHIRIN_PUBLIC_HOST} {
+	encode zstd gzip
+	request_body {
+		max_size 9MB
+	}
+	handle /shirin/api/* {
+		reverse_proxy shirin-backend:8000
+	}
+	handle /shirin/api {
+		reverse_proxy shirin-backend:8000
+	}
+	handle /shirin/webhooks/* {
+		reverse_proxy shirin-backend:8000
+	}
+	handle /shirin {
+		redir /shirin/ 308
+	}
+	handle /shirin/* {
+		reverse_proxy shirin-user-panel:80
+	}
+	handle / {
+		redir /shirin/ 308
+	}
+	handle {
+		respond "Not Found" 404
+	}
+}
+{$SHIRIN_ADMIN_HOST} {
+	encode zstd gzip
+	request_body {
+		max_size 9MB
+	}
+	handle /shirin/api/* {
+		reverse_proxy shirin-backend:8000
+	}
+	handle /shirin/api {
+		reverse_proxy shirin-backend:8000
+	}
+	handle /shirin/superadmin {
+		redir /shirin/superadmin/ 308
+	}
+	handle /shirin/superadmin/* {
+		reverse_proxy shirin-superadmin-panel:80
+	}
+	handle /shirin {
+		redir /shirin/ 308
+	}
+	handle /shirin/* {
+		reverse_proxy shirin-admin-panel:80
+	}
+	handle / {
+		redir /shirin/superadmin/ 308
+	}
+	handle {
+		respond "Not Found" 404
+	}
+}

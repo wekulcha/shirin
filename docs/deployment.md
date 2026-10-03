@@ -2,6 +2,8 @@
 
 Production ещё не изменён. Конфигурации подготовлены для собственного backend, БД и трёх панелей Shirin.
 
+Для новой отдельной ВМ в Яндекс Облаке подготовлены `deploy/docker-compose.cloud.yml`, `deploy/Caddyfile.cloud` и `deploy/yandex-cloud.env.example`. Поля консоли, ключи, DNS, `.env` и запуск описаны в [yandex-cloud.md](yandex-cloud.md).
+
 ## Адреса и префиксы
 
 | Назначение | URL |
