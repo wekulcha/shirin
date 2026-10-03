@@ -17,8 +17,6 @@ class Settings(BaseSettings):
     auth_cookie_secure: bool = True
     init_data_ttl_seconds: int = 3600
     superadmin_allowed_ids: Annotated[list[int], NoDecode] = []
-    internal_api_secret: str = ""
-    market_integration_secret: str = ""
     webhook_secret: str = ""
     bot_mode: str = "polling"
     bot_username: str = ""
@@ -27,6 +25,7 @@ class Settings(BaseSettings):
     group_language: str = "ru"
     mini_app_url: str = "https://market.wekulcha.ru/shirin/"
     admin_app_url: str = "https://adminmarket.wekulcha.online/shirin/"
+    superadmin_app_url: str = "https://adminmarket.wekulcha.online/shirin/superadmin/"
     timezone: str = "Asia/Tashkent"
     uploads_dir: str = "./uploads"
     object_storage_endpoint: str = "https://storage.yandexcloud.net"
@@ -40,6 +39,7 @@ class Settings(BaseSettings):
         "https://adminmarket.wekulcha.online",
         "http://localhost:5183",
         "http://localhost:5184",
+        "http://localhost:5185",
     ]
     max_upload_bytes: int = 8 * 1024 * 1024
     max_import_rows: int = 3000
@@ -62,8 +62,6 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a unique access secret (32+ characters) and secure cookies")
             if any(value in self.auth_access_secret.lower() for value in ("replace_", "change_me", "synthetic", "test-secret")):
                 raise ValueError("Replace the placeholder with a unique production access secret")
-            if self.market_integration_secret and len(self.market_integration_secret) < 32:
-                raise ValueError("Integration secret must be at least 32 characters")
         return self
 
 

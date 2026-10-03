@@ -53,10 +53,15 @@ services:
     restart: unless-stopped
     expose: ['80']
     networks: [default, gateway]
+  superadmin_panel:
+    build: {context: ., dockerfile: deploy/superadmin-panel.Dockerfile}
+    container_name: shirin-superadmin-panel
+    restart: unless-stopped
+    expose: ['80']
+    networks: [default, gateway]
 networks:
   gateway:
-    external: true
-    name: ${SHIRIN_GATEWAY_NETWORK:-kulcha-market_default}
+    name: ${SHIRIN_GATEWAY_NETWORK:-shirin_gateway}
 volumes:
   postgres_data:
   media_data:

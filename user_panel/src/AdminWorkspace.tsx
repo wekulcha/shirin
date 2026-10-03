@@ -7,19 +7,21 @@ import { money, translate } from './i18n';
 import { OrderBrowser, OrderDetails } from './Orders';
 import type { Api, Customer, Language, Permission, Preview, Product, User } from './types';
 
-interface Props { api: Api; user: User; lang: Language; setLang: (value: Language) => void; section?: string; entityId?: string; navigate: (section: string, id?: string) => void }
+interface Props { api: Api; user: User; lang: Language; setLang: (value: Language) => void; section?: string; entityId?: string; navigate: (section: string, id?: string) => void; mode?: 'staff' | 'superadmin'; onLogout?: () => Promise<void> }
 const productFields = ['sku', 'brand', 'category', 'name_ru', 'name_uz', 'description_ru', 'description_uz', 'volume_ml', 'sell_by_unit', 'sell_by_package', 'units_per_package', 'unit_price_uzs', 'package_price_uzs', 'is_active'] as const;
 const blankProduct = (): Product => ({ id: 0, sku: '', brand: 'Ширин', category: '', name_ru: '', name_uz: '', description_ru: null, description_uz: null, volume_ml: null, sell_by_unit: true, sell_by_package: false, units_per_package: null, unit_price_uzs: null, package_price_uzs: null, is_active: true, photo_reference: null, version: 1 });
 
-export function AdminWorkspace({ api, user, lang, setLang, section = 'orders', entityId, navigate }: Props) {
+export function AdminWorkspace({ api, user, lang, setLang, section = 'orders', entityId, navigate, mode = 'staff', onLogout }: Props) {
   const t = (key: string) => translate(key, lang);
   const editor = user.superadmin || user.permissions.includes('CAN_EDIT_MENU');
   const manager = user.superadmin || user.permissions.includes('CAN_LOOK_ORDERS');
-  const tabs = [...(manager ? ['orders'] : []), ...(editor ? ['products', 'customers', 'import'] : []), ...(user.superadmin ? ['access'] : []), 'settings'];
+  const tabs = [...(mode === 'superadmin' ? ['overview'] : []), ...(manager ? ['orders'] : []), ...(editor ? ['products', 'customers', 'import'] : []), ...(mode === 'superadmin' && user.superadmin ? ['access'] : []), 'settings'];
   const current = tabs.includes(section) ? section : tabs[0];
   if (!editor && !manager) return <Empty title={t('readOnly')} />;
-  return <div className="shirin-admin"><div className="admin-heading"><div className="brand"><span className="brand-mark">S</span><span>{t('title')}<small>{t('admin')} · UZS</small></span></div><div className="admin-user">{user.username}<button className="language" onClick={() => setLang(lang === 'ru' ? 'uz' : 'ru')}>{lang.toUpperCase()}</button></div></div>
+  if (mode === 'superadmin' && !user.superadmin) return <Empty title={t('superadminDenied')} />;
+  return <div className="shirin-admin"><div className="admin-heading"><div className="brand"><span className="brand-mark">S</span><span>{t('title')}<small>{t(mode === 'superadmin' ? 'superadmin' : 'admin')} · UZS</small></span></div><div className="admin-user">{user.username}<button className="language" onClick={() => setLang(lang === 'ru' ? 'uz' : 'ru')}>{lang.toUpperCase()}</button>{onLogout && <button className="secondary" onClick={() => void onLogout()}>{t('logout')}</button>}</div></div>
     <div className="admin-layout"><nav className="admin-nav">{tabs.map(tab => <button key={tab} className={current === tab ? 'selected' : ''} onClick={() => navigate(tab)}>{t(tab)}</button>)}</nav><div className="admin-main">
+      {current === 'overview' && <Overview api={api} lang={lang} navigate={navigate} />}
       {current === 'orders' && (entityId ? <><button className="text-button" onClick={() => navigate('orders')}>← {t('orders')}</button><OrderDetails id={Number(entityId)} api={api} lang={lang} user={user} /></> : <><h1>{t('orders')}</h1><OrderBrowser api={api} lang={lang} onSelect={id => navigate('orders', String(id))} /></>)}
       {current === 'products' && <Products api={api} lang={lang} />}
       {current === 'customers' && <Customers api={api} lang={lang} />}
@@ -27,6 +29,16 @@ export function AdminWorkspace({ api, user, lang, setLang, section = 'orders', e
       {current === 'access' && <Access api={api} lang={lang} />}
       {current === 'settings' && <Settings api={api} lang={lang} />}
     </div></div></div>;
+}
+
+function Overview({ api, lang, navigate }: { api: Api; lang: Language; navigate: Props['navigate'] }) {
+  const t = (key: string) => translate(key, lang);
+  const query = useQuery({ queryKey: ['shirinSuperadminOverview'], queryFn: () => json<Record<string, string | number>>(api, '/superadmin/overview') });
+  return <><h1>{t('overview')}</h1><p className="hint">{t('overviewHint')}</p><ErrorBox error={query.error} lang={lang} />
+    {query.isLoading && <p>{t('loading')}</p>}
+    {query.data && <div className="overview-grid">{Object.entries(query.data).map(([key, value]) => <section className="card" key={key}><p>{t(key)}</p><strong>{key === 'unpaidTotal' ? money(String(value), lang) : value}</strong></section>)}</div>}
+    <div className="actions"><button onClick={() => navigate('orders')}>{t('orders')}</button><button className="secondary" onClick={() => navigate('access')}>{t('access')}</button></div>
+  </>;
 }
 
 function Products({ api, lang }: { api: Api; lang: Language }) {
@@ -43,7 +55,7 @@ function Products({ api, lang }: { api: Api; lang: Language }) {
     try {
       const values = Object.fromEntries(productFields.map(key => [key, editing[key] === '' && !['sku', 'category', 'name_ru', 'name_uz', 'brand'].includes(key) ? null : editing[key]]));
       await json<Product>(api, '/products' + (editing.id ? '/' + editing.id : ''), body(editing.id ? { ...values, version: editing.version } : values, editing.id ? 'PUT' : 'POST'));
-      setEditing(null); await queryClient.invalidateQueries({ queryKey: ['shirinAdminProducts'] }); await queryClient.invalidateQueries({ queryKey: ['products'] });
+      setEditing(null); await queryClient.invalidateQueries({ queryKey: ['shirinAdminProducts'] }); await queryClient.invalidateQueries({ queryKey: ['products'] }); await queryClient.invalidateQueries({ queryKey: ['shirinSuperadminOverview'] });
     } catch (e) { setError(e); } finally { setBusy(false); }
   }
   async function photo(file?: File) {
@@ -86,7 +98,7 @@ function Customers({ api, lang }: { api: Api; lang: Language }) {
   const query = useQuery({ queryKey: ['shirinAdminCustomers', q, offset], queryFn: () => json<Customer[]>(api, '/customers?admin=true&q=' + encodeURIComponent(q) + '&offset=' + offset) });
   async function save(event: React.FormEvent) {
     event.preventDefault(); if (!editing) return; setBusy(true); setError(null);
-    try { await json(api, '/customers' + (editing.id ? '/' + editing.id : ''), body({ ...customerBody(editing), ...(editing.id ? { version: editing.version } : {}) }, editing.id ? 'PUT' : 'POST')); setEditing(null); await queryClient.invalidateQueries({ queryKey: ['shirinAdminCustomers'] }); }
+    try { await json(api, '/customers' + (editing.id ? '/' + editing.id : ''), body({ ...customerBody(editing), ...(editing.id ? { version: editing.version } : {}) }, editing.id ? 'PUT' : 'POST')); setEditing(null); await queryClient.invalidateQueries({ queryKey: ['shirinAdminCustomers'] }); await queryClient.invalidateQueries({ queryKey: ['shirinSuperadminOverview'] }); }
     catch (e) { setError(e); } finally { setBusy(false); }
   }
   async function photo(file?: File) {
@@ -125,7 +137,7 @@ function Excel({ api, lang, previewId, onPreview }: { api: Api; lang: Language; 
   }
   async function apply(cancel = false) {
     setBusy(true); setError(null);
-    try { await json(api, '/catalog/previews/' + previewId + (cancel ? '/cancel' : '/apply'), { method: 'POST' }); await queryClient.invalidateQueries({ queryKey: ['shirinPreview'] }); await queryClient.invalidateQueries({ queryKey: ['shirinImportLogs'] }); await queryClient.invalidateQueries({ queryKey: ['shirinAdminProducts'] }); await queryClient.invalidateQueries({ queryKey: ['products'] }); if (cancel) onPreview(); }
+    try { await json(api, '/catalog/previews/' + previewId + (cancel ? '/cancel' : '/apply'), { method: 'POST' }); await queryClient.invalidateQueries({ queryKey: ['shirinPreview'] }); await queryClient.invalidateQueries({ queryKey: ['shirinImportLogs'] }); await queryClient.invalidateQueries({ queryKey: ['shirinAdminProducts'] }); await queryClient.invalidateQueries({ queryKey: ['products'] }); await queryClient.invalidateQueries({ queryKey: ['shirinSuperadminOverview'] }); if (cancel) onPreview(); }
     catch (e) { setError(e); } finally { setBusy(false); }
   }
   const data = preview.data;
@@ -156,5 +168,5 @@ function Access({ api, lang }: { api: Api; lang: Language }) {
 function Settings({ api, lang }: { api: Api; lang: Language }) {
   const t = (key: string) => translate(key, lang);
   const query = useQuery({ queryKey: ['shirinSettings'], queryFn: () => json<Record<string, string | number | boolean>>(api, '/settings') });
-  return <><h1>{t('settings')}</h1><ErrorBox error={query.error} lang={lang} /><section className="card"><dl>{query.data && ['currency', 'timezone', 'bot_configured', 'group_configured', 'integration_configured'].map(key => <div className="settings-row" key={key}><dt>{t(key)}</dt><dd>{typeof query.data[key] === 'boolean' ? t(query.data[key] ? 'yes' : 'no') : String(query.data[key])}</dd></div>)}</dl></section></>;
+  return <><h1>{t('settings')}</h1><ErrorBox error={query.error} lang={lang} /><section className="card"><dl>{query.data && ['currency', 'timezone', 'bot_configured', 'group_configured', 'superadmin_app_url'].map(key => <div className="settings-row" key={key}><dt>{t(key)}</dt><dd>{typeof query.data[key] === 'boolean' ? t(query.data[key] ? 'yes' : 'no') : String(query.data[key])}</dd></div>)}</dl></section></>;
 }

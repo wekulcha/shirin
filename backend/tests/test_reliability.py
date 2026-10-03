@@ -3,8 +3,6 @@ import copy
 import hashlib
 import hmac
 import json
-import secrets
-import time
 from datetime import timedelta
 
 import pytest
@@ -12,7 +10,6 @@ from app.config import get_settings
 from app.database import async_session
 from app.models import ImportLog, ImportPreview, Outbox, Product
 from app.models.business import now
-from app.services.access import signed_value
 from app.services.notifications import process_outbox_once
 from app.services.session_auth import verify_access_token
 from conftest import PRODUCT, add_product, init_data, place_order
@@ -21,20 +18,9 @@ from sqlalchemy.orm import Session
 from test_business import apply, preview, workbook_with
 
 
-async def test_signed_multipart_upload(client, headers):
-    request = client.build_request("POST", "/shirin/api/catalog/preview", files={"file": ("catalog.xlsx", workbook_with([PRODUCT]))})
-    body = await request.aread()
-    timestamp = str(int(time.time()))
-    nonce = secrets.token_hex(20)
-    signature = hmac.new(
-        get_settings().market_integration_secret.encode(),
-        signed_value("POST", request.url.path, "", body, "101", timestamp, nonce),
-        hashlib.sha256,
-    ).hexdigest()
-    request.headers.update(
-        {"X-Shirin-Actor": "101", "X-Shirin-Timestamp": timestamp, "X-Shirin-Nonce": nonce, "X-Shirin-Signature": signature}
-    )
-    result = await client.send(request)
+async def test_direct_superadmin_multipart_upload(client, headers):
+    assert (await client.get("/shirin/api/superadmin/me", headers=headers[101])).status_code == 200
+    result = await client.post("/shirin/api/catalog/preview", files={"file": ("catalog.xlsx", workbook_with([PRODUCT]))}, headers=headers[101])
     assert result.status_code == 200 and not result.json()["payload"]["errors"], result.text
 
 

@@ -33,7 +33,7 @@ export function OrderDetails({ id, api, lang, user }: { id: number; api: Api; la
   const manager = user.superadmin || user.permissions.includes('CAN_LOOK_ORDERS');
   async function change(values: object, link = false) {
     setBusy(true); setError(null);
-    try { await json(api, '/orders/' + id + (link ? '/customer' : ''), body(values, link ? 'POST' : 'PATCH')); await queryClient.invalidateQueries({ queryKey: ['shirinOrder', id] }); await queryClient.invalidateQueries({ queryKey: ['shirinOrders'] }); }
+    try { await json(api, '/orders/' + id + (link ? '/customer' : ''), body(values, link ? 'POST' : 'PATCH')); await queryClient.invalidateQueries({ queryKey: ['shirinOrder', id] }); await queryClient.invalidateQueries({ queryKey: ['shirinOrders'] }); await queryClient.invalidateQueries({ queryKey: ['shirinSuperadminOverview'] }); }
     catch (e) { setError(e); } finally { setBusy(false); }
   }
   if (!order) return <><ErrorBox error={query.error} lang={lang} /><p>{t('loading')}</p></>;

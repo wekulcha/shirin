@@ -1,5 +1,7 @@
 # Merge these handles into the existing domain blocks, BEFORE their root proxy.
 # Keep the /shirin prefix; backend routes already contain it.
+# The final 404 is only for a standalone gateway; keep the existing root handler
+# when adding Shirin routes to a gateway that already serves other applications.
 market.wekulcha.ru {
 	encode zstd gzip
 	request_body {
@@ -21,7 +23,7 @@ market.wekulcha.ru {
 		reverse_proxy shirin-user-panel:80
 	}
 	handle {
-		reverse_proxy kulcha-market-user-panel:80
+		respond "Not Found" 404
 	}
 }
 adminmarket.wekulcha.online {
@@ -35,6 +37,12 @@ adminmarket.wekulcha.online {
 	handle /shirin/api {
 		reverse_proxy shirin-backend:8000
 	}
+	handle /shirin/superadmin {
+		redir /shirin/superadmin/ 308
+	}
+	handle /shirin/superadmin/* {
+		reverse_proxy shirin-superadmin-panel:80
+	}
 	handle /shirin {
 		redir /shirin/ 308
 	}
@@ -42,6 +50,6 @@ adminmarket.wekulcha.online {
 		reverse_proxy shirin-admin-panel:80
 	}
 	handle {
-		reverse_proxy kulcha-market-admin-panel:80
+		respond "Not Found" 404
 	}
 }

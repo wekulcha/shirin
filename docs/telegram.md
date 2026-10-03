@@ -4,7 +4,7 @@
 
 ## BotFather и окружение
 
-Создайте бота у BotFather и поместите token в `SHIRIN_USER_BOT_TOKEN` через окружение/секретное хранилище. Настройте описание и кнопку меню Web App на `SHIRIN_MINI_APP_URL`. Адреса Mini App и админки — HTTPS с `/shirin/`, согласно `deployment.md`. Команда `/start` также выдаёт кнопки открытия; административные кнопки появляются по правам пользователя.
+Создайте бота у BotFather и поместите token в `SHIRIN_USER_BOT_TOKEN` через окружение/секретное хранилище. Настройте описание и кнопку меню Web App на `SHIRIN_MINI_APP_URL`. Адреса панелей — HTTPS с `/shirin/`, суперадминка — `/shirin/superadmin/`, согласно `deployment.md`. Команда `/start` также выдаёт кнопки открытия; административные кнопки появляются по правам пользователя. Отдельная кнопка «Суперадмин Shirin» показывается только Telegram ID из `SHIRIN_SUPERADMIN_ALLOWED_IDS`.
 
 Основные параметры:
 
@@ -13,6 +13,7 @@
 | SHIRIN_USER_BOT_TOKEN | Только token бота Shirin |
 | SHIRIN_BOT_USERNAME | Имя бота без @, при необходимости |
 | SHIRIN_SUPERADMIN_ALLOWED_IDS | Telegram IDs разработчиков через запятую |
+| SHIRIN_SUPERADMIN_APP_URL | HTTPS адрес отдельной суперадминки Shirin |
 | SHIRIN_WORK_GROUP_ID | ID выбранной тестовой/рабочей группы |
 | SHIRIN_WORK_GROUP_TOPIC_ID | ID темы forum-группы; 0 для общей группы |
 | SHIRIN_GROUP_LANGUAGE | ru или uz |
@@ -23,7 +24,7 @@
 
 ## Polling
 
-Для локального настоящего тестового окружения выберите `SHIRIN_BOT_MODE=polling`. Из `backend` запустите `../.venv/bin/python -m app.bot` и отдельный worker `../.venv/bin/python -m app.services.notifications`. Backend и обе панели работают одновременно, общая БД принадлежит Shirin.
+Для локального настоящего тестового окружения выберите `SHIRIN_BOT_MODE=polling`. Из `backend` запустите `../.venv/bin/python -m app.bot` и отдельный worker `../.venv/bin/python -m app.services.notifications`. Все панели используют один backend и БД Shirin.
 
 Если для этого же тестового бота уже установлен webhook, оператор сначала удаляет его через официальный Bot API. Код приложения сам не вызывает `deleteWebhook` и не переключает режим существующего бота. Polling и webhook одного бота одновременно не запускаются.
 

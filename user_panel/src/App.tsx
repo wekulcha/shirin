@@ -6,14 +6,8 @@ import { cents, money } from './i18n';
 import { Empty, ErrorBox, Photo } from './Controls';
 import { CheckoutPage } from './CheckoutPage';
 import { OrderDetail, OrderList } from './Orders';
+import { AuthGate } from './AuthGate';
 import type { Product } from './types';
-
-export function AuthGate({ children }: { children: React.ReactNode }) {
-  const { user, ready, authError, t, lang, reloadAuth } = useApp();
-  if (!ready) return <div className="login"><span className="brand-mark">S</span><p>{t('loading')}</p></div>;
-  if (!user) return <div className="login"><span className="brand-mark">S</span><h1>{t('login')}</h1><p>{t('loginHint')}</p><ErrorBox error={authError} lang={lang} /><button onClick={reloadAuth}>{t('retry')}</button></div>;
-  return children;
-}
 
 function Shell() {
   const { user, lang, setLang, t, cart } = useApp();

@@ -5,6 +5,7 @@ export interface AppState {
   user: User | null; ready: boolean; authError: string; reloadAuth: () => void;
   lang: Language; setLang: (value: Language) => void; t: (key: string) => string; api: Api;
   cart: CartItem[]; add: (product: Product, format: 'unit' | 'package', delta: number) => void; clearCart: () => void;
+  logout: () => Promise<void>;
 }
 export const AppContext = createContext<AppState | null>(null);
 export function useApp() {

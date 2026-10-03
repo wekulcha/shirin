@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { apiFetch, configureApiClient } from './api/client';
 import { BASE_URL } from './api/baseUrl';
 import { translate } from './i18n';
@@ -26,6 +27,7 @@ function readCart(userId: number): CartItem[] {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
   const [authError, setError] = useState('');
@@ -65,6 +67,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [reload]);
   useEffect(() => { if (user) localStorage.setItem('shirin.cart.v1.' + user.id, JSON.stringify(cart)); }, [cart, user]);
   const setLang = useCallback((value: Language) => { setLanguage(value); localStorage.setItem('shirin.language.v1', value); document.documentElement.lang = value; }, []);
+  const logout = useCallback(async () => {
+    const response = await fetch(BASE_URL + '/auth/logout', { method: 'POST', credentials: 'include' });
+    if (!response.ok) throw new Error('error');
+    token = null;
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    queryClient.clear();
+    setUser(null);
+    setCart([]);
+    setError('login_required');
+  }, [queryClient]);
   const add = useCallback((product: Product, format: 'unit' | 'package', delta: number) => {
     setCart(items => {
       const index = items.findIndex(item => item.product.id === product.id && item.sale_format === format);
@@ -75,6 +87,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
   const value = useMemo(() => ({ user, ready, authError, reloadAuth: () => { setReady(false); setReload(v => v + 1); }, lang, setLang,
-    t: (key: string) => translate(key, lang), api, cart, add, clearCart: () => setCart([]) }), [user, ready, authError, lang, setLang, cart, add]);
+    t: (key: string) => translate(key, lang), api, cart, add, clearCart: () => setCart([]), logout }), [user, ready, authError, lang, setLang, cart, add, logout]);
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

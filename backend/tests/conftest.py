@@ -11,7 +11,6 @@ os.environ["SHIRIN_AUTH_ACCESS_SECRET"] = "test-shirin-access-secret-unique-1234
 os.environ["SHIRIN_USER_BOT_TOKEN"] = "123456:synthetic-telegram-test-secret"
 os.environ["SHIRIN_AUTH_COOKIE_SECURE"] = "false"
 os.environ["SHIRIN_SUPERADMIN_ALLOWED_IDS"] = "101"
-os.environ["SHIRIN_MARKET_INTEGRATION_SECRET"] = "test-integration-secret-unique-123456789"
 os.environ["SHIRIN_UPLOADS_DIR"] = f"/private/tmp/shirin-test-media-{os.getpid()}"
 os.environ["SHIRIN_BOT_MODE"] = "webhook"
 os.environ["SHIRIN_WEBHOOK_SECRET"] = "synthetic-webhook-secret"

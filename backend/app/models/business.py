@@ -156,12 +156,6 @@ class WebhookUpdate(Base):
     next_attempt_at: Mapped[datetime] = mapped_column(DateTime, default=now)
 
 
-class IntegrationNonce(Base):
-    __tablename__ = "integration_nonces"
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
-
-
 class Media(Base):
     __tablename__ = "media"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)

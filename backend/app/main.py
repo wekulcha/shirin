@@ -35,15 +35,6 @@ async def request_limits(request: Request, call_next):
     origin = request.headers.get("Origin")
     if request.method in ("POST", "PUT", "PATCH", "DELETE") and origin and origin not in settings.cors_allowed_origins:
         return JSONResponse({"detail": "invalid_origin"}, status_code=403)
-    if request.headers.get("X-Shirin-Signature"):
-        payload = bytearray()
-        async for chunk in request.stream():
-            payload.extend(chunk)
-            if len(payload) > settings.max_upload_bytes + 65536:
-                return JSONResponse({"detail": "file_too_large"}, status_code=413)
-        # Cache before FastAPI consumes multipart; Starlette replays this body downstream.
-        request._body = bytes(payload)
-        request.state.integration_body = request._body
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response

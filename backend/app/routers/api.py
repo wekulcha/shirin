@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models import Customer, ImportLog, ImportPreview, Media, Order, OrderEvent, Outbox, Product, Staff, User
 from app.models.business import Permission
 from app.schemas import AccessInput, Checkout, CreateOrder, CustomerInput, CustomerUpdate, Login, ProductInput, ProductUpdate, Transition
-from app.services.access import Actor, actor_for_user, menu_editor, order_manager, principal
+from app.services.access import Actor, actor_for_user, menu_editor, order_manager, principal, superadmin
 from app.services.catalog import save_customer, save_product, serialize
 from app.services.excel import apply_import, build_workbook, preview_import
 from app.services.media import attach_product_photo, media_url, upload_media
@@ -85,6 +85,24 @@ async def logout(
 @router.get("/auth/me")
 async def me(actor: Actor = Depends(principal)):
     return actor_dto(actor)
+
+
+@router.get("/superadmin/me")
+async def superadmin_me(actor: Actor = Depends(superadmin)):
+    return actor_dto(actor)
+
+
+@router.get("/superadmin/overview")
+async def superadmin_overview(actor: Actor = Depends(superadmin), db: AsyncSession = Depends(get_db)):
+    unpaid_total = await db.scalar(select(func.coalesce(func.sum(Order.total_uzs), 0)).where(Order.payment_status == "UNPAID"))
+    return {
+        "activeProducts": await db.scalar(select(func.count(Product.id)).where(Product.is_active)),
+        "activeCustomers": await db.scalar(select(func.count(Customer.id)).where(Customer.is_active)),
+        "allOrders": await db.scalar(select(func.count(Order.id))),
+        "unpaidOrders": await db.scalar(select(func.count(Order.id)).where(Order.payment_status == "UNPAID")),
+        "unpaidTotal": format(unpaid_total, ".2f"),
+        "pendingNotifications": await db.scalar(select(func.count(Outbox.id)).where(Outbox.state != "SENT")),
+    }
 
 
 @router.get("/products")
@@ -379,9 +397,9 @@ async def settings_info(actor: Actor = Depends(principal)):
         "timezone": s.timezone,
         "mini_app_url": s.mini_app_url,
         "admin_app_url": s.admin_app_url,
+        "superadmin_app_url": s.superadmin_app_url,
         "bot_configured": bool(s.user_bot_token),
         "group_configured": bool(s.work_group_id),
-        "integration_configured": bool(s.market_integration_secret),
         "max_upload_bytes": s.max_upload_bytes,
         "max_import_rows": s.max_import_rows,
     }

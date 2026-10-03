@@ -3,7 +3,8 @@ from datetime import timedelta
 
 from aiogram.types import Chat, PhotoSize
 from aiogram.types import User as TelegramUser
-from app.bot import confirm, select_product, set_state, uploaded_file
+from app.bot import confirm, menu, select_product, set_state, uploaded_file
+from app.config import get_settings
 from app.database import async_session
 from app.models import BotState, Product
 from app.models.business import now
@@ -18,9 +19,11 @@ class FakeMessage:
         self.document = None
         self.photo = [PhotoSize(file_id="fake", file_unique_id="unique", width=10, height=10, file_size=100)] if content else None
         self.responses = []
+        self.keyboards = []
 
     async def answer(self, text, **kwargs):
         self.responses.append(text)
+        self.keyboards.append(kwargs.get("reply_markup"))
 
     async def answer_photo(self, photo, **kwargs):
         self.responses.append(kwargs)
@@ -92,3 +95,11 @@ async def test_bot_stale_state_and_permission_revocation(client, headers):
     await confirm(FakeCallback(202, "confirm:no-rights"))
     async with async_session() as db:
         assert (await db.get(Product, product["id"])).is_active
+
+
+async def test_bot_superadmin_entry_only_for_allowlisted_user():
+    for uid, allowed in ((101, True), (404, False), (303, False), (202, False)):
+        message = FakeMessage(uid)
+        await menu(message)
+        urls = [button.web_app.url for row in message.keyboards[-1].inline_keyboard for button in row if button.web_app]
+        assert (get_settings().superadmin_app_url in urls) is allowed

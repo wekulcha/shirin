@@ -9,7 +9,7 @@
 
 Backend: Python, FastAPI ≥0.115, SQLAlchemy async ≥2.0, PostgreSQL/asyncpg, Alembic, pydantic-settings, httpx. Панели: React, TypeScript, Vite, react-router-dom, TanStack Query. Боты: aiogram 3.13+, httpx. CI и тесты в отслеживаемых файлах отсутствуют.
 
-`StaffPermission` имеет ровно два уровня: `CAN_EDIT_MENU` и `CAN_LOOK_ORDERS`. Это записи прав сотрудников по магазину, а не поле role у пользователя. Обычный пользователь может оформлять заказ, но не менять каталог и оплату. Суперадминка обращается к одному backend Market и управляет `Restaurant`; безопасной маршрутизации к независимым проектам нет. Привилегия разработчика — `superadmin_allowed_ids`, не третья роль. Для новой интеграции пустой allowlist закрывает доступ (в старом коде проверка пустого списка пропускается).
+`StaffPermission` имеет ровно два уровня: `CAN_EDIT_MENU` и `CAN_LOOK_ORDERS`. Это записи прав сотрудников по магазину, а не поле role у пользователя. Обычный пользователь может оформлять заказ, но не менять каталог и оплату. Исходная суперадминка обращается к одному backend Market и управляет `Restaurant`. Привилегия разработчика — `superadmin_allowed_ids`, не третья роль. В отдельной суперадминке Shirin пустой allowlist закрывает доступ (в старом коде проверка пустого списка пропускается).
 
 Авторизация: проверка Telegram initData, собственный HMAC access JWT, refresh-session в базе и HttpOnly cookie. Переиспользуем session_auth, User, RefreshSession, database/get_db; исправляем срок initData, refresh rotation и область cookie для независимого приложения.
 
@@ -23,6 +23,6 @@ Backend: Python, FastAPI ≥0.115, SQLAlchemy async ≥2.0, PostgreSQL/asyncpg, 
 
 Скопированы только перечисленные исходные модули, конфигурация TS, lockfile и API transport React. Новая БД, SHIRIN_ окружение, собственный бот, cookies и localStorage. Ни .git, ни .env, ни дампы, ни зависимости и персональные данные не копируются. LICENSE в обоих исходниках не найден; права на дальнейшее распространение исходной основы следует подтвердить владельцу. Происхождение сохраняется этим документом.
 
-Интеграция в отдельном worktree `../market-shirin-integration`, ветка `feature/shirin-integration`: backend Market проверяет существующий bearer и явный allowlist, затем подписывает запрос к Shirin; браузер не видит секрет. Полноценная страница управления в существующей суперадминке работает через этот proxy. Данные остаются в разных базах.
+По последующему запросу пользователя интеграция Market удалена обратным коммитом в `../market-shirin-integration`, ветка `feature/shirin-integration`. Теперь `superadmin_panel` — отдельная сборка Shirin с собственной Telegram-сессией и серверным allowlist. Подписанный proxy и его служебная таблица удалены; рабочие папки исходных проектов сохранены.
 
 Официальная Telegram документация проверена: https://core.telegram.org/bots/webapps#locationmanager, https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app, https://core.telegram.org/bots/api#setwebhook. LocationManager.init/getLocation поддерживается с Bot API 8.0; ручной адрес/карта остаются доступны. Не используем вымышленную отправку Location из Mini App.

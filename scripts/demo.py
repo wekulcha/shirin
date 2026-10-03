@@ -23,11 +23,10 @@ if not env_file.exists():
                 "SHIRIN_AUTH_ACCESS_SECRET=" + secrets.token_urlsafe(40),
                 "SHIRIN_USER_BOT_TOKEN=123456:" + secrets.token_urlsafe(35),
                 "SHIRIN_SUPERADMIN_ALLOWED_IDS=101",
-                "SHIRIN_MARKET_INTEGRATION_SECRET=" + secrets.token_urlsafe(40),
                 "SHIRIN_WORK_GROUP_ID=0",
                 "SHIRIN_UPLOADS_DIR=" + str(ROOT / "uploads"),
                 "SHIRIN_INIT_DATA_TTL_SECONDS=600",
-                "SHIRIN_CORS_ALLOWED_ORIGINS=http://localhost:5183,http://localhost:5184,http://localhost:8093,http://localhost:8094",
+                "SHIRIN_CORS_ALLOWED_ORIGINS=http://localhost:5183,http://localhost:5184,http://localhost:5185,http://localhost:8093,http://localhost:8094,http://localhost:8095",
             ]
         )
         + "\n"
@@ -128,7 +127,10 @@ def login_data(uid):
 
 if "--links-only" not in sys.argv:
     asyncio.run(seed())
-ports = (8093, 8094) if "--built" in sys.argv else (5183, 5184)
-for label, port, uid, page in [("Mini App", ports[0], 202, ""), ("Admin", ports[1], 101, "products")]:
+ports = (8093, 8094, 8095) if "--built" in sys.argv else (5183, 5184, 5185)
+links = [("Mini App", ports[0], 202, ""), ("Admin", ports[1], 202, "orders"), ("Superadmin", ports[2], 101, "superadmin/")]
+for label, port, uid, page in links:
+    if "--superadmin" in sys.argv and label != "Superadmin":
+        continue
     print(f"{label}: http://localhost:{port}/shirin/{page}#tgWebAppData={quote(login_data(uid), safe='')}")
 print("Synthetic demo only. Signed login links expire after 10 minutes. Work group notifications are disabled.")

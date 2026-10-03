@@ -1,4 +1,4 @@
-"""Local demo runner. Ctrl+C stops only the three processes started here."""
+"""Local demo runner. --superadmin starts only its panel and backend."""
 
 import os
 import signal
@@ -8,12 +8,13 @@ import time
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
-subprocess.run([sys.executable, str(root / "scripts/demo.py")], check=True)
+subprocess.run([sys.executable, str(root / "scripts/demo.py"), *(["--superadmin"] if "--superadmin" in sys.argv else [])], check=True)
 commands = [
     ([sys.executable, "-m", "uvicorn", "app.main:app", "--port", "8083", "--reload", "--no-access-log"], root / "backend"),
-    (["npm", "run", "dev"], root / "user_panel"),
-    (["npm", "run", "dev"], root / "admin_panel"),
 ]
+if "--superadmin" not in sys.argv:
+    commands.extend([(["npm", "run", "dev"], root / "user_panel"), (["npm", "run", "dev"], root / "admin_panel")])
+commands.append((["npm", "run", "dev"], root / "superadmin_panel"))
 processes = []
 try:
     for command, cwd in commands:

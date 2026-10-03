@@ -1,6 +1,4 @@
 import asyncio
-import hashlib
-import hmac
 import io
 import secrets
 import time
@@ -14,7 +12,6 @@ from app.database import async_session
 from app.models import ImportLog, Order, Outbox, Product, WebhookUpdate
 from app.models.business import now
 from app.schemas import ProductInput
-from app.services.access import signed_value
 from app.services.excel import COLUMNS, MAIN, build_workbook, worksheet
 from app.services.notifications import chunks, notification_text, process_outbox_once
 from app.services.telegram_auth import verify_telegram_init_data
@@ -302,23 +299,11 @@ async def test_media_validation_and_protected_store_photo(client, headers):
     assert (await client.get(path, headers=headers[505])).status_code == 403
 
 
-async def test_signed_integration_actor_body_nonce_and_isolation(client, headers):
-    path = "/shirin/api/settings"
-
-    def signature(uid, nonce=None):
-        timestamp = str(int(time.time()))
-        nonce = nonce or secrets.token_hex(16)
-        message = signed_value("GET", path, "", b"", str(uid), timestamp, nonce)
-        sig = hmac.new(get_settings().market_integration_secret.encode(), message, hashlib.sha256).hexdigest()
-        return {"X-Shirin-Actor": str(uid), "X-Shirin-Timestamp": timestamp, "X-Shirin-Nonce": nonce, "X-Shirin-Signature": sig}
-
-    signed = signature(101)
-    assert (await client.get(path, headers=signed)).status_code == 200
-    assert (await client.get(path, headers=signed)).status_code == 401
-    assert (await client.get(path, headers=signature(202))).status_code == 401
-    altered = signature(101)
-    altered["X-Shirin-Actor"] = "202"
-    assert (await client.get(path, headers=altered)).status_code == 401
+async def test_removed_integration_cannot_authenticate(client):
+    headers = {"X-Shirin-Actor": "101", "X-Shirin-Timestamp": str(int(time.time())), "X-Shirin-Nonce": secrets.token_hex(20), "X-Shirin-Signature": "retired-signature"}
+    for path in ("/shirin/api/settings", "/shirin/api/superadmin/me", "/shirin/api/access"):
+        result = await client.get(path, headers=headers)
+        assert result.status_code == 401 and result.json()["detail"] == "login_required"
     assert verify_telegram_init_data(init_data(202), "market-bot-token") is None
 
 

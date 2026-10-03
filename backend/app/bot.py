@@ -70,6 +70,8 @@ async def menu(message: Message, telegram_user=None):
             return translate(key, lang)
 
         rows = [[InlineKeyboardButton(text=t("catalog"), web_app=WebAppInfo(url=settings.mini_app_url))]]
+        if actor.superadmin:
+            rows.append([InlineKeyboardButton(text=t("superadmin"), web_app=WebAppInfo(url=settings.superadmin_app_url))])
         if actor.permissions or actor.superadmin:
             rows.append([InlineKeyboardButton(text=t("admin"), web_app=WebAppInfo(url=settings.admin_app_url))])
         if actor.has(Permission.CAN_EDIT_MENU):

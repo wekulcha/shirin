@@ -34,6 +34,20 @@ http://localhost:8094 {
 	handle /shirin/api {
 		reverse_proxy localhost:8083
 	}
+	handle /shirin/superadmin {
+		redir /shirin/superadmin/ 308
+	}
+	handle /shirin/superadmin/assets/* {
+		uri strip_prefix /shirin/superadmin
+		root * {$SHIRIN_PROJECT_ROOT}/superadmin_panel/dist
+		file_server
+	}
+	handle /shirin/superadmin/* {
+		uri strip_prefix /shirin/superadmin
+		root * {$SHIRIN_PROJECT_ROOT}/superadmin_panel/dist
+		try_files {path} /index.html
+		file_server
+	}
 	handle /shirin {
 		redir /shirin/ 308
 	}
@@ -45,6 +59,28 @@ http://localhost:8094 {
 	handle /shirin/* {
 		uri strip_prefix /shirin
 		root * {$SHIRIN_PROJECT_ROOT}/admin_panel/dist
+		try_files {path} /index.html
+		file_server
+	}
+}
+http://localhost:8095 {
+	handle /shirin/api/* {
+		reverse_proxy localhost:8083
+	}
+	handle /shirin/api {
+		reverse_proxy localhost:8083
+	}
+	handle /shirin/superadmin {
+		redir /shirin/superadmin/ 308
+	}
+	handle /shirin/superadmin/assets/* {
+		uri strip_prefix /shirin/superadmin
+		root * {$SHIRIN_PROJECT_ROOT}/superadmin_panel/dist
+		file_server
+	}
+	handle /shirin/superadmin/* {
+		uri strip_prefix /shirin/superadmin
+		root * {$SHIRIN_PROJECT_ROOT}/superadmin_panel/dist
 		try_files {path} /index.html
 		file_server
 	}

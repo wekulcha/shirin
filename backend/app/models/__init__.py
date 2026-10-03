@@ -3,7 +3,6 @@ from app.models.business import (
     Customer,
     ImportLog,
     ImportPreview,
-    IntegrationNonce,
     Media,
     Order,
     OrderEvent,
@@ -28,6 +27,5 @@ __all__ = [
     "ImportLog",
     "BotState",
     "WebhookUpdate",
-    "IntegrationNonce",
     "Media",
 ]

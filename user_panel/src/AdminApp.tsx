@@ -1,5 +1,5 @@
 import { createBrowserRouter, RouterProvider, useNavigate, useParams } from 'react-router-dom';
-import { AuthGate } from './App';
+import { AuthGate } from './AuthGate';
 import { useApp } from './state';
 import { AdminWorkspace } from './AdminWorkspace';
 
