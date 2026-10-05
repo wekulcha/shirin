@@ -9,7 +9,8 @@
 | Каталог/фото | Два бренда, три сочетания форматов, независимые цены, версия товара, immutable SKU, JPEG/PNG/WEBP и private media. |
 | Магазины/checkout | Справочник с доступами, снимок нового магазина, optional photo, карта/LocationManager и подтверждение точки; черновик каждой вкладки. |
 | Заказы | Серверное предложение, точные суммы/снимки, идемпотентность и PostgreSQL race, статусы/оплата/события; оба порядка оплаты/доставки. |
-| Бот/outbox | Один aiogram бот, сохраняемые диалоги, preview/подтверждение фото, RU/UZ, persistent outbox с retry/lease/message IDs. |
+| Боты/outbox | Три отдельных процесса user/admin/superadmin, собственные токены и входы в панели. Admin bot ведёт сохраняемые диалоги и отправляет заказы в группу; RU/UZ, persistent outbox с retry/lease/message IDs. |
+| Запуск | Исполняемые up.sh/down.sh в корне и deploy/, миграции до запуска приложений, общий gateway по умолчанию. |
 | Excel | Preview diff, 0/false/clear, версии/права/срок, атомарность/лог и повторное применение; проверен rollback при ошибке. |
 | Отдельная суперадминка | Собственная сборка superadmin_panel, порт 5185, обзор/CRUD/клиенты/Excel/заказы/доступы/настройки, Telegram allowlist и logout. |
 | Удаление интеграции | Обратный коммит в worktree Market восстанавливает дерево основы 4bf905f. В Shirin удалены signed proxy auth, secrets, nonce-модель и скрипты Market. |

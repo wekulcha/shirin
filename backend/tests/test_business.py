@@ -326,5 +326,16 @@ async def test_webhook_auth_redelivery_and_json_404(client):
         ).status_code == 200
     async with async_session() as db:
         assert await db.scalar(select(func.count(WebhookUpdate.id))) == 1
+    # Telegram update IDs can coincide between bots; deduplicate within each role.
+    for role in ("admin", "superadmin"):
+        for _ in range(2):
+            result = await client.post(
+                f"/shirin/webhooks/telegram/{role}/", json=update,
+                headers={"X-Telegram-Bot-Api-Secret-Token": get_settings().webhook_secret},
+            )
+            assert result.status_code == 200
+    async with async_session() as db:
+        assert await db.scalar(select(func.count(WebhookUpdate.id))) == 3
+        assert {row.bot_role for row in (await db.scalars(select(WebhookUpdate))).all()} == {"user", "admin", "superadmin"}
     result = await client.get("/shirin/api/missing")
     assert result.status_code == 404 and result.headers["content-type"].startswith("application/json")

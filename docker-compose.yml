@@ -34,10 +34,33 @@ services:
     command: [python, -m, app.services.notifications]
     volumes: [media_data:/app/uploads]
     depends_on: {migrate: {condition: service_completed_successfully}}
-  bot:
+  user_bot:
     build: {context: ., dockerfile: deploy/backend.Dockerfile}
+    container_name: shirin-user-bot
     restart: unless-stopped
     env_file: .env
+    environment:
+      SHIRIN_BOT_ROLE: user
+    command: [python, -m, app.bot]
+    volumes: [media_data:/app/uploads]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+  admin_bot:
+    build: {context: ., dockerfile: deploy/backend.Dockerfile}
+    container_name: shirin-admin-bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SHIRIN_BOT_ROLE: admin
+    command: [python, -m, app.bot]
+    volumes: [media_data:/app/uploads]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+  superadmin_bot:
+    build: {context: ., dockerfile: deploy/backend.Dockerfile}
+    container_name: shirin-superadmin-bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SHIRIN_BOT_ROLE: superadmin
     command: [python, -m, app.bot]
     volumes: [media_data:/app/uploads]
     depends_on: {migrate: {condition: service_completed_successfully}}

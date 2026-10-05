@@ -168,5 +168,5 @@ function Access({ api, lang }: { api: Api; lang: Language }) {
 function Settings({ api, lang }: { api: Api; lang: Language }) {
   const t = (key: string) => translate(key, lang);
   const query = useQuery({ queryKey: ['shirinSettings'], queryFn: () => json<Record<string, string | number | boolean>>(api, '/settings') });
-  return <><h1>{t('settings')}</h1><ErrorBox error={query.error} lang={lang} /><section className="card"><dl>{query.data && ['currency', 'timezone', 'bot_configured', 'group_configured', 'superadmin_app_url'].map(key => <div className="settings-row" key={key}><dt>{t(key)}</dt><dd>{typeof query.data[key] === 'boolean' ? t(query.data[key] ? 'yes' : 'no') : String(query.data[key])}</dd></div>)}</dl></section></>;
+  return <><h1>{t('settings')}</h1><ErrorBox error={query.error} lang={lang} /><section className="card"><dl>{query.data && ['currency', 'timezone', 'bot_configured', 'admin_bot_configured', 'superadmin_bot_configured', 'group_configured', 'superadmin_app_url'].map(key => <div className="settings-row" key={key}><dt>{t(key)}</dt><dd>{typeof query.data[key] === 'boolean' ? t(query.data[key] ? 'yes' : 'no') : String(query.data[key])}</dd></div>)}</dl></section></>;
 }

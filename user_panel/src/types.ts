@@ -1,4 +1,6 @@
 export type Language = 'ru' | 'uz';
+export type BotRole = 'user' | 'admin' | 'superadmin';
+export type BotLinks = Record<BotRole, { username: string; url: string }>;
 export type Permission = 'CAN_EDIT_MENU' | 'CAN_LOOK_ORDERS';
 export interface User { id: number; username: string; permissions: Permission[]; superadmin: boolean }
 export interface Product {

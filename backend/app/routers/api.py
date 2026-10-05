@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,11 +16,12 @@ from app.services.excel import apply_import, build_workbook, preview_import
 from app.services.media import attach_product_photo, media_url, upload_media
 from app.services.orders import create_order, get_order, order_dto, quote, transition
 from app.services.session_auth import (
-    REFRESH_COOKIE_NAME,
+    BotRole,
     clear_refresh_cookie,
     create_access_token,
     create_refresh_session,
     ensure_customer,
+    refresh_cookie_name,
     revoke_refresh_session,
     rotate_refresh_session,
     set_refresh_cookie,
@@ -34,20 +35,51 @@ def actor_dto(actor: Actor) -> dict:
     return {"id": actor.user.id, "username": actor.user.username, "permissions": sorted(actor.permissions), "superadmin": actor.superadmin}
 
 
-@router.post("/auth/telegram")
-async def login(body: Login, response: Response, db: AsyncSession = Depends(get_db)):
+def check_bot_access(actor: Actor, role: BotRole):
+    if role == "superadmin":
+        actor.require_superadmin()
+    elif role == "admin" and not actor.has(Permission.CAN_EDIT_MENU) and not actor.has(Permission.CAN_LOOK_ORDERS):
+        raise HTTPException(403, "access_denied")
+
+
+async def login_session(body: Login, response: Response, db: AsyncSession, role: BotRole):
     settings = get_settings()
-    tg = verify_telegram_init_data(body.init_data, settings.user_bot_token, settings.init_data_ttl_seconds)
+    bot_token = settings.bot_token_for(role)
+    if not bot_token:
+        raise HTTPException(503, "bot_not_configured")
+    tg = verify_telegram_init_data(body.init_data, bot_token, settings.init_data_ttl_seconds)
     if not tg:
         raise HTTPException(401, "invalid_telegram_data")
     user = await ensure_customer(db, tg["id"], tg.get("username") or tg.get("first_name"))
-    access_token, expiry = create_access_token(user.id)
-    refresh_token, refresh_expiry = await create_refresh_session(db, user.id)
-    set_refresh_cookie(response, refresh_token, refresh_expiry)
+    actor = await actor_for_user(db, user)
+    check_bot_access(actor, role)
+    access_token, expiry = create_access_token(user.id, role)
+    refresh_token, refresh_expiry = await create_refresh_session(db, user.id, role)
+    set_refresh_cookie(response, refresh_token, refresh_expiry, role)
     return {
         "accessToken": access_token,
         "accessTokenExpiresAt": expiry.isoformat() + "Z",
-        "user": actor_dto(await actor_for_user(db, user)),
+        "botRole": role,
+        "user": actor_dto(actor),
+    }
+
+
+@router.post("/auth/telegram")
+async def login(body: Login, response: Response, db: AsyncSession = Depends(get_db)):
+    return await login_session(body, response, db, "user")
+
+
+@router.post("/auth/telegram/{role}")
+async def login_bot(role: BotRole, body: Login, response: Response, db: AsyncSession = Depends(get_db)):
+    return await login_session(body, response, db, role)
+
+
+@router.get("/auth/bots")
+async def bot_links():
+    settings = get_settings()
+    return {
+        role: {"username": settings.bot_username_for(role), "url": f"https://t.me/{settings.bot_username_for(role)}" if settings.bot_username_for(role) else ""}
+        for role in ("user", "admin", "superadmin")
     }
 
 
@@ -57,29 +89,46 @@ def check_cookie_origin(request: Request):
         raise HTTPException(403, "invalid_origin")
 
 
-@router.post("/auth/refresh")
-async def refresh(
-    request: Request, response: Response, db: AsyncSession = Depends(get_db), cookie: str | None = Cookie(None, alias=REFRESH_COOKIE_NAME)
-):
+async def refresh_bot_session(request: Request, response: Response, db: AsyncSession, role: BotRole):
     check_cookie_origin(request)
+    cookie = request.cookies.get(refresh_cookie_name(role))
     if not cookie:
         raise HTTPException(401, "login_required")
-    rotated = await rotate_refresh_session(db, cookie)
+    rotated = await rotate_refresh_session(db, cookie, role)
     if not rotated:
         raise HTTPException(401, "login_required")
     user, token, expires = rotated
-    access, expiry = create_access_token(user.id)
-    set_refresh_cookie(response, token, expires)
-    return {"accessToken": access, "accessTokenExpiresAt": expiry.isoformat() + "Z", "user": actor_dto(await actor_for_user(db, user))}
+    actor = await actor_for_user(db, user)
+    check_bot_access(actor, role)
+    access, expiry = create_access_token(user.id, role)
+    set_refresh_cookie(response, token, expires, role)
+    return {"accessToken": access, "accessTokenExpiresAt": expiry.isoformat() + "Z", "botRole": role, "user": actor_dto(actor)}
+
+
+@router.post("/auth/refresh")
+async def refresh(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    return await refresh_bot_session(request, response, db, "user")
+
+
+@router.post("/auth/refresh/{role}")
+async def refresh_bot(role: BotRole, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    return await refresh_bot_session(request, response, db, role)
+
+
+async def logout_bot_session(request: Request, response: Response, db: AsyncSession, role: BotRole):
+    check_cookie_origin(request)
+    await revoke_refresh_session(db, request.cookies.get(refresh_cookie_name(role)), role)
+    clear_refresh_cookie(response, role)
 
 
 @router.post("/auth/logout", status_code=204)
-async def logout(
-    request: Request, response: Response, db: AsyncSession = Depends(get_db), cookie: str | None = Cookie(None, alias=REFRESH_COOKIE_NAME)
-):
-    check_cookie_origin(request)
-    await revoke_refresh_session(db, cookie)
-    clear_refresh_cookie(response)
+async def logout(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    await logout_bot_session(request, response, db, "user")
+
+
+@router.post("/auth/logout/{role}", status_code=204)
+async def logout_bot(role: BotRole, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    await logout_bot_session(request, response, db, role)
 
 
 @router.get("/auth/me")
@@ -399,6 +448,8 @@ async def settings_info(actor: Actor = Depends(principal)):
         "admin_app_url": s.admin_app_url,
         "superadmin_app_url": s.superadmin_app_url,
         "bot_configured": bool(s.user_bot_token),
+        "admin_bot_configured": bool(s.admin_bot_token),
+        "superadmin_bot_configured": bool(s.superadmin_bot_token),
         "group_configured": bool(s.work_group_id),
         "max_upload_bytes": s.max_upload_bytes,
         "max_import_rows": s.max_import_rows,

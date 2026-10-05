@@ -1,5 +1,6 @@
-"""One aiogram bot; durable dialogs and shared backend business services."""
+"""Three independent bot entrypoints sharing Shirin business services."""
 
+import argparse
 import asyncio
 import io
 import logging
@@ -25,9 +26,18 @@ from app.services.media import attach_product_photo, checked_image, upload_media
 from app.services.notifications import chunks
 from app.services.orders import transition
 from app.services.session_auth import ensure_customer
+from app.services.telegram_client import create_bot
 
-router = Router()
 logger = logging.getLogger(__name__)
+
+
+def role_for(bot_role: str | None) -> str:
+    return bot_role or get_settings().bot_role
+
+
+def require_admin_bot(bot_role: str | None):
+    if role_for(bot_role) != "admin":
+        raise HTTPException(403, "access_denied")
 
 
 def language(user) -> str:
@@ -58,8 +68,9 @@ async def set_state(db, uid: int, kind: str, payload: dict):
     return state
 
 
-async def menu(message: Message, telegram_user=None):
+async def menu(message: Message, telegram_user=None, bot_role: str | None = None):
     settings = get_settings()
+    role = role_for(bot_role)
     telegram_user = telegram_user or message.from_user
     async with async_session() as db:
         user = await ensure_customer(db, telegram_user.id, telegram_user.username or telegram_user.first_name)
@@ -69,12 +80,17 @@ async def menu(message: Message, telegram_user=None):
         def t(key):
             return translate(key, lang)
 
-        rows = [[InlineKeyboardButton(text=t("catalog"), web_app=WebAppInfo(url=settings.mini_app_url))]]
-        if actor.superadmin:
-            rows.append([InlineKeyboardButton(text=t("superadmin"), web_app=WebAppInfo(url=settings.superadmin_app_url))])
-        if actor.permissions or actor.superadmin:
-            rows.append([InlineKeyboardButton(text=t("admin"), web_app=WebAppInfo(url=settings.admin_app_url))])
-        if actor.has(Permission.CAN_EDIT_MENU):
+        if (role == "superadmin" and not actor.superadmin) or (role == "admin" and not (actor.permissions or actor.superadmin)):
+            await db.commit()
+            await message.answer(t("access_denied"))
+            return
+        app_url, label = {
+            "user": (settings.mini_app_url, "catalog"),
+            "admin": (settings.admin_app_url, "admin"),
+            "superadmin": (settings.superadmin_app_url, "superadmin"),
+        }[role]
+        rows = [[InlineKeyboardButton(text=t(label), web_app=WebAppInfo(url=app_url))]]
+        if role == "admin" and actor.has(Permission.CAN_EDIT_MENU):
             for command, text in [
                 ("export_meals", "export"),
                 ("update_meals", "update"),
@@ -90,16 +106,16 @@ async def menu(message: Message, telegram_user=None):
     await message.answer(t("welcome"), reply_markup=keyboard(rows))
 
 
-@router.message(Command("start", "help"))
-async def start(message: Message):
+async def start(message: Message, bot_role: str | None = None):
     if message.chat.type != "private":
         return
-    await menu(message)
+    await menu(message, bot_role=bot_role)
 
 
-async def command_action(message: Message, telegram_user, command: str):
+async def command_action(message: Message, telegram_user, command: str, bot_role: str | None = None):
     if message.chat.type != "private":
         return
+    require_admin_bot(bot_role)
     async with async_session() as db:
         user = await ensure_customer(db, telegram_user.id, telegram_user.username or telegram_user.first_name)
         actor = await actor_for_user(db, user)
@@ -139,20 +155,18 @@ async def product_choices(db, message: Message, lang: str, kind: str, token: str
     await message.answer(translate("choose", lang) + " · SKU / 🔎", reply_markup=keyboard(rows))
 
 
-@router.message(Command("export_meals", "update_meals", "add_meal", "remove_meal", "set_photo"))
-async def admin_command(message: Message):
+async def admin_command(message: Message, bot_role: str | None = None):
     try:
-        await command_action(message, message.from_user, message.text.split()[0].split("@")[0][1:])
+        await command_action(message, message.from_user, message.text.split()[0].split("@")[0][1:], bot_role)
     except HTTPException as exc:
         async with async_session() as db:
             lang = await lang_for(db, message.from_user)
         await message.answer(translate("access_denied" if exc.status_code == 403 else "error", lang))
 
 
-@router.callback_query(F.data.startswith("cmd:"))
-async def button_command(callback: CallbackQuery):
+async def button_command(callback: CallbackQuery, bot_role: str | None = None):
     try:
-        await command_action(callback.message, callback.from_user, callback.data.split(":", 1)[1])
+        await command_action(callback.message, callback.from_user, callback.data.split(":", 1)[1], bot_role)
         await callback.answer()
     except HTTPException:
         async with async_session() as db:
@@ -160,8 +174,7 @@ async def button_command(callback: CallbackQuery):
         await callback.answer(translate("access_denied", lang), show_alert=True)
 
 
-@router.callback_query(F.data.startswith("lang:"))
-async def change_language(callback: CallbackQuery):
+async def change_language(callback: CallbackQuery, bot_role: str | None = None):
     async with async_session() as db:
         user = await ensure_customer(db, callback.from_user.id, callback.from_user.username or callback.from_user.first_name)
         lang = callback.data.split(":")[1]
@@ -169,11 +182,12 @@ async def change_language(callback: CallbackQuery):
             user.language = lang
             await db.commit()
     await callback.answer(translate("done", lang))
-    await menu(callback.message, callback.from_user)
+    await menu(callback.message, callback.from_user, bot_role)
 
 
-@router.message(Command("cancel"))
-async def cancel_command(message: Message):
+async def cancel_command(message: Message, bot_role: str | None = None):
+    if message.chat.type != "private" or role_for(bot_role) != "admin":
+        return
     async with async_session() as db:
         await cancel_dialog(db, message.from_user.id)
         lang = await lang_for(db, message.from_user)
@@ -193,8 +207,10 @@ async def cancel_dialog(db, user_id: int):
         await db.delete(state)
 
 
-@router.callback_query(F.data == "cancel")
-async def cancel_callback(callback: CallbackQuery):
+async def cancel_callback(callback: CallbackQuery, bot_role: str | None = None):
+    if role_for(bot_role) != "admin":
+        await callback.answer(translate("access_denied", language(callback.from_user)), show_alert=True)
+        return
     async with async_session() as db:
         await cancel_dialog(db, callback.from_user.id)
         lang = await lang_for(db, callback.from_user)
@@ -203,13 +219,13 @@ async def cancel_callback(callback: CallbackQuery):
     await callback.message.edit_reply_markup(reply_markup=None)
 
 
-@router.callback_query(F.data.startswith("select:"))
-async def select_product(callback: CallbackQuery):
+async def select_product(callback: CallbackQuery, bot_role: str | None = None):
     async with async_session() as db:
         user = await ensure_customer(db, callback.from_user.id, callback.from_user.username)
         actor = await actor_for_user(db, user)
         lang = user.language
         try:
+            require_admin_bot(bot_role)
             actor.require(Permission.CAN_EDIT_MENU)
             state = await db.get(BotState, user.id)
             _, token, pid = callback.data.split(":")
@@ -244,8 +260,7 @@ async def select_product(callback: CallbackQuery):
             await callback.answer(translate("access_denied" if exc.status_code == 403 else "expired", lang), show_alert=True)
 
 
-@router.message(F.document | F.photo)
-async def uploaded_file(message: Message, bot: Bot):
+async def uploaded_file(message: Message, bot: Bot, bot_role: str | None = None):
     if message.chat.type != "private":
         return
     async with async_session() as db:
@@ -253,6 +268,7 @@ async def uploaded_file(message: Message, bot: Bot):
         actor = await actor_for_user(db, user)
         lang = user.language
         try:
+            require_admin_bot(bot_role)
             actor.require(Permission.CAN_EDIT_MENU)
             state = await db.get(BotState, user.id)
             if not state or state.expires_at < now() or state.kind not in ("excel", "photo_wait"):
@@ -318,9 +334,8 @@ async def uploaded_file(message: Message, bot: Bot):
             )
 
 
-@router.message(F.text)
-async def search_product(message: Message):
-    if message.chat.type != "private":
+async def search_product(message: Message, bot_role: str | None = None):
+    if message.chat.type != "private" or role_for(bot_role) != "admin":
         return
     async with async_session() as db:
         user = await ensure_customer(db, message.from_user.id, message.from_user.username)
@@ -330,13 +345,13 @@ async def search_product(message: Message):
             await product_choices(db, message, user.language, state.kind, state.payload["token"], message.text[:100])
 
 
-@router.callback_query(F.data.startswith("confirm:"))
-async def confirm(callback: CallbackQuery):
+async def confirm(callback: CallbackQuery, bot_role: str | None = None):
     async with async_session() as db:
         user = await ensure_customer(db, callback.from_user.id, callback.from_user.username)
         actor = await actor_for_user(db, user)
         lang = user.language
         try:
+            require_admin_bot(bot_role)
             actor.require(Permission.CAN_EDIT_MENU)
             state = await db.scalar(select(BotState).where(BotState.user_id == user.id).with_for_update())
             if not state or state.expires_at < now() or state.payload.get("token") != callback.data.split(":")[1]:
@@ -365,13 +380,13 @@ async def confirm(callback: CallbackQuery):
             await callback.answer(translate(key, lang) if key in ("access_denied", "expired", "changed_since_preview", "preview_expired", "import_has_errors") else translate("error", lang), show_alert=True)
 
 
-@router.callback_query(F.data.startswith("order:"))
-async def order_button(callback: CallbackQuery):
+async def order_button(callback: CallbackQuery, bot_role: str | None = None):
     async with async_session() as db:
         user = await ensure_customer(db, callback.from_user.id, callback.from_user.username or callback.from_user.first_name)
         actor = await actor_for_user(db, user)
         lang = user.language
         try:
+            require_admin_bot(bot_role)
             _, oid, action = callback.data.split(":")
             result = await transition(
                 db, actor, int(oid), Transition(payment_status="PAID") if action == "PAID" else Transition(status=action)
@@ -382,18 +397,30 @@ async def order_button(callback: CallbackQuery):
             await callback.answer(translate("access_denied", lang), show_alert=True)
 
 
-def dispatcher() -> Dispatcher:
-    dp = Dispatcher()
+def dispatcher(bot_role: str | None = None) -> Dispatcher:
+    # Each process and each test receives a fresh router and its own role.
+    dp = Dispatcher(bot_role=role_for(bot_role))
+    router = Router()
+    router.message.register(start, Command("start", "help"))
+    router.message.register(admin_command, Command("export_meals", "update_meals", "add_meal", "remove_meal", "set_photo"))
+    router.message.register(cancel_command, Command("cancel"))
+    router.message.register(uploaded_file, F.document | F.photo)
+    router.message.register(search_product, F.text)
+    router.callback_query.register(button_command, F.data.startswith("cmd:"))
+    router.callback_query.register(change_language, F.data.startswith("lang:"))
+    router.callback_query.register(cancel_callback, F.data == "cancel")
+    router.callback_query.register(select_product, F.data.startswith("select:"))
+    router.callback_query.register(confirm, F.data.startswith("confirm:"))
+    router.callback_query.register(order_button, F.data.startswith("order:"))
     dp.include_router(router)
     return dp
 
 
-async def run_bot():
+async def run_bot(bot_role: str | None = None):
     settings = get_settings()
-    if not settings.user_bot_token:
-        raise RuntimeError("SHIRIN_USER_BOT_TOKEN is required")
-    bot = Bot(settings.user_bot_token)
-    dp = dispatcher()
+    role = role_for(bot_role)
+    bot = create_bot(role)
+    dp = dispatcher(role)
     try:
         if settings.bot_mode == "polling":
             # No implicit deleteWebhook/setWebhook: production lifecycle is operator-controlled.
@@ -403,8 +430,9 @@ async def run_bot():
                 async with async_session() as db:
                     entry = await db.scalar(
                         select(WebhookUpdate)
-                        .where(WebhookUpdate.state == "PENDING", WebhookUpdate.next_attempt_at <= now())
+                        .where(WebhookUpdate.bot_role == role, WebhookUpdate.state == "PENDING", WebhookUpdate.next_attempt_at <= now())
                         .order_by(WebhookUpdate.id)
+                        .with_for_update(skip_locked=True)
                         .limit(1)
                     )
                     if entry:
@@ -426,4 +454,6 @@ async def run_bot():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_bot())
+    parser = argparse.ArgumentParser(description="Run one of the three Shirin bots")
+    parser.add_argument("--role", choices=("user", "admin", "superadmin"), default=None, help="Overrides SHIRIN_BOT_ROLE")
+    asyncio.run(run_bot(parser.parse_args().role))

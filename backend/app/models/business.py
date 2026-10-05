@@ -150,6 +150,7 @@ class BotState(Base):
 class WebhookUpdate(Base):
     __tablename__ = "webhook_updates"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    bot_role: Mapped[str] = mapped_column(String(16), primary_key=True, default="user")
     payload: Mapped[dict] = mapped_column(JSON)
     state: Mapped[str] = mapped_column(String(16), default="PENDING")
     attempts: Mapped[int] = mapped_column(Integer, default=0)

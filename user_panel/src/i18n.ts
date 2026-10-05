@@ -2,7 +2,7 @@ import type { Language } from './types';
 
 const ru: Record<string, string> = {
   title: 'Ширин', catalog: 'Каталог', cart: 'Корзина', orders: 'Заказы', settings: 'Настройки', admin: 'Управление',
-  superadmin: 'Суперадмин Shirin', overview: 'Обзор', overviewHint: 'Заказы, каталог и доступы компании в одном месте.', superadminLogin: 'Суперадмин Shirin', superadminLoginHint: 'Откройте суперадминку через бота Shirin под разрешённым аккаунтом Telegram.', superadminDenied: 'Доступ только для суперадминистратора Shirin', logout: 'Выйти', activeProducts: 'Товаров в продаже', activeCustomers: 'Активных клиентов', allOrders: 'Всего заказов', unpaidOrders: 'Неоплаченных заказов', unpaidTotal: 'К оплате', pendingNotifications: 'Уведомлений в очереди', superadmin_app_url: 'Адрес суперадминки',
+  superadmin: 'Суперадмин Shirin', overview: 'Обзор', overviewHint: 'Заказы, каталог и доступы компании в одном месте.', superadminLogin: 'Суперадмин Shirin', superadminLoginHint: 'Откройте панель через суперадмин-бота Shirin под разрешённым аккаунтом Telegram.', superadminDenied: 'Доступ только для суперадминистратора Shirin', logout: 'Выйти', activeProducts: 'Товаров в продаже', activeCustomers: 'Активных клиентов', allOrders: 'Всего заказов', unpaidOrders: 'Неоплаченных заказов', unpaidTotal: 'К оплате', pendingNotifications: 'Уведомлений в очереди', superadmin_app_url: 'Адрес суперадминки',
   is_active: 'Активен', payment_status: 'Оплата', customer_id: 'Клиент', user_name: 'Имя пользователя',
   subtitle: 'Натуральные напитки для ваших магазинов', greeting: 'Хороший вкус. Каждый день.',
   catalogHint: 'Два бренда, один заказ. Выберите бутылки или ящики.', search: 'Название, артикул или категория', all: 'Все',
@@ -10,7 +10,7 @@ const ru: Record<string, string> = {
   emptyCart: 'Корзина пока пуста', emptyCartHint: 'Выберите напитки в каталоге, чтобы оформить заказ для магазина.',
   emptyCatalog: 'Товары не найдены', emptyOrders: 'Заказов пока нет', emptyCustomers: 'Клиенты не найдены',
   continue: 'Перейти в каталог', loading: 'Загрузка…', retry: 'Повторить', error: 'Не удалось выполнить действие',
-  login: 'Откройте «Ширин» через Telegram-бот', loginHint: 'Вход защищён вашим аккаунтом Telegram.',
+  login: 'Откройте «Ширин» через Telegram-бот', loginHint: 'Вход защищён вашим аккаунтом Telegram.', adminLogin: 'Админка Shirin', adminLoginHint: 'Откройте панель через админ-бота Shirin под аккаунтом сотрудника.', openBot: 'Открыть бота', bot_not_configured: 'Бот не настроен. Обратитесь к администратору.', admin_bot_configured: 'Админ-бот подключён', superadmin_bot_configured: 'Суперадмин-бот подключён',
   store: 'Магазин', existingStore: 'Найти магазин', newStore: 'Новый магазин', storeSearch: 'Название, код, телефон или адрес',
   name: 'Название магазина', code: 'Код магазина', contact_name: 'Контактное лицо', phone: 'Телефон', address: 'Адрес доставки',
   extra_contacts: 'Дополнительные контакты', comment: 'Комментарий', latitude: 'Широта', longitude: 'Долгота', map_url: 'Ссылка на карту',
@@ -35,7 +35,7 @@ const ru: Record<string, string> = {
   importLog: 'Журнал импорта', menuPermission: 'Редактирование каталога', orderPermission: 'Работа с заказами', userId: 'Telegram ID',
   CAN_EDIT_MENU: 'Редактирование каталога', CAN_LOOK_ORDERS: 'Работа с заказами', readOnly: 'Недостаточно прав для этого раздела',
   notifications: 'Уведомления', PENDING: 'Ожидает отправки', SENDING: 'Отправляется', SENT: 'Отправлено', attempts: 'Попытки',
-  linkCustomer: 'Создать клиента из заказа', timezone: 'Часовой пояс', currency: 'Валюта', bot_configured: 'Бот подключён',
+  linkCustomer: 'Создать клиента из заказа', timezone: 'Часовой пояс', currency: 'Валюта', bot_configured: 'Юзер-бот подключён',
   group_configured: 'Рабочая группа настроена', yes: 'Да', no: 'Нет',
   loadMore: 'Показать ещё', back: 'Назад', remove: 'Удалить из корзины', searchOrders: 'Номер, магазин или телефон',
   invalid_telegram_data: 'Вход устарел. Откройте приложение через Telegram заново.', login_required: 'Войдите через Telegram.',
@@ -53,7 +53,7 @@ const ru: Record<string, string> = {
 };
 const uz: Record<string, string> = {
   title: 'Shirin', catalog: 'Katalog', cart: 'Savat', orders: 'Buyurtmalar', settings: 'Sozlamalar', admin: 'Boshqaruv',
-  superadmin: 'Shirin superadmin', overview: 'Umumiy ko‘rinish', overviewHint: 'Buyurtmalar, katalog va kompaniya ruxsatlari bir joyda.', superadminLogin: 'Shirin superadmin', superadminLoginHint: 'Superadmin panelini Shirin bot orqali ruxsat berilgan Telegram hisobi bilan oching.', superadminDenied: 'Faqat Shirin superadmin uchun', logout: 'Chiqish', activeProducts: 'Sotuvdagi mahsulotlar', activeCustomers: 'Faol mijozlar', allOrders: 'Jami buyurtmalar', unpaidOrders: 'To‘lanmagan buyurtmalar', unpaidTotal: 'To‘lanishi kerak', pendingNotifications: 'Navbatdagi bildirishnomalar', superadmin_app_url: 'Superadmin manzili',
+  superadmin: 'Shirin superadmin', overview: 'Umumiy ko‘rinish', overviewHint: 'Buyurtmalar, katalog va kompaniya ruxsatlari bir joyda.', superadminLogin: 'Shirin superadmin', superadminLoginHint: 'Panelni Shirin superadmin boti orqali ruxsat berilgan Telegram hisobi bilan oching.', superadminDenied: 'Faqat Shirin superadmin uchun', logout: 'Chiqish', activeProducts: 'Sotuvdagi mahsulotlar', activeCustomers: 'Faol mijozlar', allOrders: 'Jami buyurtmalar', unpaidOrders: 'To‘lanmagan buyurtmalar', unpaidTotal: 'To‘lanishi kerak', pendingNotifications: 'Navbatdagi bildirishnomalar', superadmin_app_url: 'Superadmin manzili',
   is_active: 'Faol', payment_status: 'To‘lov', customer_id: 'Mijoz', user_name: 'Foydalanuvchi nomi',
   subtitle: 'Do‘konlaringiz uchun tabiiy ichimliklar', greeting: 'Yaxshi ta’m. Har kuni.',
   catalogHint: 'Ikki brend, bitta buyurtma. Shisha yoki qutilarni tanlang.', search: 'Nom, artikul yoki kategoriya', all: 'Barchasi',
@@ -61,7 +61,7 @@ const uz: Record<string, string> = {
   emptyCart: 'Savat hozircha bo‘sh', emptyCartHint: 'Do‘kon uchun buyurtma berish uchun katalogdan ichimliklarni tanlang.',
   emptyCatalog: 'Mahsulotlar topilmadi', emptyOrders: 'Buyurtmalar hali yo‘q', emptyCustomers: 'Mijozlar topilmadi',
   continue: 'Katalogga o‘tish', loading: 'Yuklanmoqda…', retry: 'Qayta urinish', error: 'Amal bajarilmadi',
-  login: 'Shirin ilovasini Telegram bot orqali oching', loginHint: 'Kirish Telegram hisobingiz bilan himoyalangan.',
+  login: 'Shirin ilovasini Telegram bot orqali oching', loginHint: 'Kirish Telegram hisobingiz bilan himoyalangan.', adminLogin: 'Shirin admin paneli', adminLoginHint: 'Panelni Shirin admin boti orqali xodim hisobi bilan oching.', openBot: 'Botni ochish', bot_not_configured: 'Bot sozlanmagan. Administratorga murojaat qiling.', admin_bot_configured: 'Admin bot ulangan', superadmin_bot_configured: 'Superadmin bot ulangan',
   store: 'Do‘kon', existingStore: 'Do‘konni qidirish', newStore: 'Yangi do‘kon', storeSearch: 'Nom, kod, telefon yoki manzil',
   name: 'Do‘kon nomi', code: 'Do‘kon kodi', contact_name: 'Aloqa qiluvchi', phone: 'Telefon', address: 'Yetkazish manzili',
   extra_contacts: 'Qo‘shimcha aloqa', comment: 'Izoh', latitude: 'Kenglik', longitude: 'Uzunlik', map_url: 'Xarita havolasi',
@@ -86,7 +86,7 @@ const uz: Record<string, string> = {
   importLog: 'Import jurnali', menuPermission: 'Katalogni tahrirlash', orderPermission: 'Buyurtmalar bilan ishlash', userId: 'Telegram ID',
   CAN_EDIT_MENU: 'Katalogni tahrirlash', CAN_LOOK_ORDERS: 'Buyurtmalar bilan ishlash', readOnly: 'Bu bo‘lim uchun ruxsat yetarli emas',
   notifications: 'Bildirishnomalar', PENDING: 'Yuborishni kutmoqda', SENDING: 'Yuborilmoqda', SENT: 'Yuborildi', attempts: 'Urinishlar',
-  linkCustomer: 'Buyurtmadan mijoz yaratish', timezone: 'Vaqt mintaqasi', currency: 'Valyuta', bot_configured: 'Bot ulangan',
+  linkCustomer: 'Buyurtmadan mijoz yaratish', timezone: 'Vaqt mintaqasi', currency: 'Valyuta', bot_configured: 'Foydalanuvchi boti ulangan',
   group_configured: 'Ishchi guruh sozlangan', yes: 'Ha', no: 'Yo‘q',
   loadMore: 'Yana ko‘rsatish', back: 'Orqaga', remove: 'Savatdan olib tashlash', searchOrders: 'Raqam, do‘kon yoki telefon',
   invalid_telegram_data: 'Kirish eskirgan. Ilovani Telegram orqali qayta oching.', login_required: 'Telegram orqali kiring.',

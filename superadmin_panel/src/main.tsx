@@ -5,4 +5,4 @@ import { AppProvider } from '../../user_panel/src/AppProvider';
 import '../../user_panel/src/style.css';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15000, retry: 1 } } });
-createRoot(document.getElementById('root')!).render(<QueryClientProvider client={queryClient}><AppProvider><SuperadminApp /></AppProvider></QueryClientProvider>);
+createRoot(document.getElementById('root')!).render(<QueryClientProvider client={queryClient}><AppProvider botRole="superadmin"><SuperadminApp /></AppProvider></QueryClientProvider>);

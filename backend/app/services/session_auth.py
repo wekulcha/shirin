@@ -7,6 +7,7 @@ import json
 import secrets
 import time
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from fastapi import HTTPException, Response
 from sqlalchemy import select, update
@@ -17,6 +18,11 @@ from app.models.refresh_session import RefreshSession
 from app.models.user import User
 
 REFRESH_COOKIE_NAME = "shirin_refresh_token"
+BotRole = Literal["user", "admin", "superadmin"]
+
+
+def refresh_cookie_name(role: BotRole = "user") -> str:
+    return REFRESH_COOKIE_NAME if role == "user" else f"shirin_{role}_refresh_token"
 
 
 def utcnow() -> datetime:
@@ -40,8 +46,10 @@ def _sign(value: bytes, secret: str) -> str:
     return _base64url_encode(hmac.new(secret.encode(), value, hashlib.sha256).digest())
 
 
-def _hash_refresh_token(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
+def _hash_refresh_token(token: str, role: BotRole = "user") -> str:
+    # Keep existing user sessions working; other bots have independent token namespaces.
+    value = token if role == "user" else f"{role}\0{token}"
+    return hashlib.sha256(value.encode()).hexdigest()
 
 
 def _get_access_secret() -> str:
@@ -51,7 +59,7 @@ def _get_access_secret() -> str:
     raise HTTPException(503, "Auth access secret is not configured")
 
 
-def create_access_token(user_id: int) -> tuple[str, datetime]:
+def create_access_token(user_id: int, role: BotRole = "user") -> tuple[str, datetime]:
     settings = get_settings()
     now = utcnow()
     expires_at = now + timedelta(minutes=settings.auth_access_ttl_minutes)
@@ -60,6 +68,7 @@ def create_access_token(user_id: int) -> tuple[str, datetime]:
         "sub": str(user_id),
         "typ": "access",
         "iss": "shirin",
+        "bot": role,
         "iat": int(now.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
@@ -143,14 +152,14 @@ async def ensure_customer(db: AsyncSession, telegram_id: int, username: str | No
     return user
 
 
-async def create_refresh_session(db: AsyncSession, user_id: int) -> tuple[str, datetime]:
+async def create_refresh_session(db: AsyncSession, user_id: int, role: BotRole = "user") -> tuple[str, datetime]:
     settings = get_settings()
     raw_token = secrets.token_urlsafe(48)
     now = utcnow_naive()
     expires_at = now + timedelta(days=settings.auth_refresh_ttl_days)
     session = RefreshSession(
         user_id=user_id,
-        token_hash=_hash_refresh_token(raw_token),
+        token_hash=_hash_refresh_token(raw_token, role),
         created_at=now,
         last_used_at=now,
         expires_at=expires_at,
@@ -164,10 +173,11 @@ async def create_refresh_session(db: AsyncSession, user_id: int) -> tuple[str, d
 async def rotate_refresh_session(
     db: AsyncSession,
     raw_token: str,
+    role: BotRole = "user",
 ) -> tuple[User, str, datetime] | None:
     now = utcnow_naive()
     result = await db.execute(
-        select(RefreshSession).where(RefreshSession.token_hash == _hash_refresh_token(raw_token)).with_for_update(of=RefreshSession)
+        select(RefreshSession).where(RefreshSession.token_hash == _hash_refresh_token(raw_token, role)).with_for_update(of=RefreshSession)
     )
     session = result.scalars().first()
     if not session:
@@ -182,7 +192,7 @@ async def rotate_refresh_session(
     )
     if claimed.rowcount != 1:
         return None
-    refresh_token, refresh_expires_at = await create_refresh_session(db, session.user_id)
+    refresh_token, refresh_expires_at = await create_refresh_session(db, session.user_id, role)
 
     result = await db.execute(select(User).where(User.id == session.user_id))
     user = result.scalars().first()
@@ -193,10 +203,12 @@ async def rotate_refresh_session(
     return user, refresh_token, refresh_expires_at
 
 
-async def revoke_refresh_session(db: AsyncSession, raw_token: str | None) -> None:
+async def revoke_refresh_session(db: AsyncSession, raw_token: str | None, role: BotRole = "user") -> None:
     if not raw_token:
         return
-    result = await db.execute(select(RefreshSession).where(RefreshSession.token_hash == _hash_refresh_token(raw_token)).with_for_update())
+    result = await db.execute(
+        select(RefreshSession).where(RefreshSession.token_hash == _hash_refresh_token(raw_token, role)).with_for_update(of=RefreshSession)
+    )
     session = result.scalars().first()
     if session and session.revoked_at is None:
         session.revoked_at = utcnow_naive()
@@ -204,11 +216,11 @@ async def revoke_refresh_session(db: AsyncSession, raw_token: str | None) -> Non
         await db.flush()
 
 
-def set_refresh_cookie(response: Response, raw_token: str, expires_at: datetime) -> None:
+def set_refresh_cookie(response: Response, raw_token: str, expires_at: datetime, role: BotRole = "user") -> None:
     settings = get_settings()
     max_age = max(0, int((expires_at - utcnow_naive()).total_seconds()))
     response.set_cookie(
-        key=REFRESH_COOKIE_NAME,
+        key=refresh_cookie_name(role),
         value=raw_token,
         httponly=True,
         secure=settings.auth_cookie_secure,
@@ -219,10 +231,10 @@ def set_refresh_cookie(response: Response, raw_token: str, expires_at: datetime)
     )
 
 
-def clear_refresh_cookie(response: Response) -> None:
+def clear_refresh_cookie(response: Response, role: BotRole = "user") -> None:
     settings = get_settings()
     response.delete_cookie(
-        key=REFRESH_COOKIE_NAME,
+        key=refresh_cookie_name(role),
         domain=settings.auth_cookie_domain or None,
         path="/shirin/api/auth",
         secure=settings.auth_cookie_secure,

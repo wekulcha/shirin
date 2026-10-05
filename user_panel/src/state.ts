@@ -1,8 +1,9 @@
 import { createContext, useContext } from 'react';
-import type { Api, CartItem, Language, Product, User } from './types';
+import type { Api, BotLinks, BotRole, CartItem, Language, Product, User } from './types';
 
 export interface AppState {
   user: User | null; ready: boolean; authError: string; reloadAuth: () => void;
+  botRole: BotRole; botLinks: BotLinks | null;
   lang: Language; setLang: (value: Language) => void; t: (key: string) => string; api: Api;
   cart: CartItem[]; add: (product: Product, format: 'unit' | 'package', delta: number) => void; clearCart: () => void;
   logout: () => Promise<void>;

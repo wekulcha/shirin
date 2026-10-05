@@ -1,8 +1,6 @@
 # Развёртывание Shirin
 
-Production ещё не изменён. Конфигурации подготовлены для собственного backend, БД и трёх панелей Shirin.
-
-Для новой отдельной ВМ в Яндекс Облаке подготовлены `deploy/docker-compose.cloud.yml`, `deploy/Caddyfile.cloud` и `deploy/yandex-cloud.env.example`. Поля консоли, ключи, DNS, `.env` и запуск описаны в [yandex-cloud.md](yandex-cloud.md).
+Shirin запускается отдельным Compose-проектом: своя PostgreSQL, backend, worker уведомлений, три панели и три бота. На ВМ с уже работающими Market/KULCHA приложение подключается к существующему gateway. Домены и корневые страницы соседних приложений сохраняются.
 
 ## Адреса и префиксы
 
@@ -12,39 +10,102 @@ Production ещё не изменён. Конфигурации подготов
 | Панель сотрудников | `https://adminmarket.wekulcha.online/shirin/` |
 | Суперадминка | `https://adminmarket.wekulcha.online/shirin/superadmin/` |
 | API | `/shirin/api/` на обоих доменах |
-| Telegram webhook | `https://market.wekulcha.ru/shirin/webhooks/telegram/` |
+| Telegram webhooks | `/shirin/webhooks/telegram/user/`, `/admin/`, `/superadmin/` на публичном домене |
 
-Vite base/router basename совпадают с путями каждой панели. Caddy сохраняет префикс `/shirin/`; API/webhook обрабатываются до SPA, `/shirin/superadmin/*` — до общей панели сотрудников. nginx возвращает fallback для вложенных страниц и настоящий 404 для отсутствующих assets; API 404 остаётся JSON.
+Vite base/router basename совпадают с путями панелей. Caddy сохраняет префикс `/shirin/`; API и webhook обрабатываются до SPA, `/shirin/superadmin/*` — до общей панели сотрудников. nginx возвращает fallback для вложенных страниц; отсутствующие assets и неизвестные API получают настоящий 404.
 
-Cookie — `shirin_refresh_token`, path `/shirin/api/auth`, host-only, HttpOnly, Secure, SameSite=Lax. Все панели используют сессию собственного бота Shirin. CORS перечислен явно; refresh/logout проверяют Origin. Браузерные ключи имеют префикс `shirin.`, корзина отделена по Telegram ID. Service worker не используется.
+Панели используют вход `/shirin/api/auth/telegram/{role}`, где `role` — `user`, `admin` или `superadmin`. Подпись Telegram initData проверяется по token соответствующего бота. Запуск admin bot не выдаёт права: backend проверяет `CAN_EDIT_MENU`/`CAN_LOOK_ORDERS`, а для суперадминистратора — `SHIRIN_SUPERADMIN_ALLOWED_IDS`. Refresh/logout и cookies разделены по назначению панели. CORS задаётся явно; refresh/logout проверяют Origin. Имена браузерного хранилища Shirin отделены от Market.
 
-## Окружение и Compose
+## Существующая ВМ с Market/KULCHA
 
-1. Создать production `.env` из `.env.example`: собственный пароль/URL БД, случайный access secret (32+ символов), token бота Shirin, ID рабочей группы, явный список Telegram ID суперадминистраторов и три HTTPS URL панелей. Пароль в URL должен быть URL-encoded при наличии специальных символов. Demo `.env` предназначена для локальной SQLite.
-2. Compose создаёт собственную сеть `shirin_gateway` (имя меняется через `SHIRIN_GATEWAY_NETWORK`). Backend и три панели подключаются к ней; Postgres доступен во внутренней сети проекта. Внешнему gateway нужен доступ к сети Shirin. Если используется общий Caddy, подключите его контейнер к `shirin_gateway` и закрепите подключение в его Compose. Авторизация и БД Market для этого не требуются.
-3. Volumes `postgres_data` и `media_data` принадлежат проекту `shirin`; подготовить их backup/restore. Фото товаров поддерживают отдельный S3 bucket/prefix, фото магазинов выдаются с проверкой доступа из закрытого media volume.
-
-Команды для выбранного серверного окружения:
+Все команды выполняются **на сервере в папке Shirin**, например `~/shirin`. Уже настроенную `.env` нужно дополнить, сохранив пароль существующей БД, access secret, домены, proxy, рабочую группу и Object Storage. При первом запуске:
 
 ```bash
-docker compose config -q
-docker compose build
-docker compose up -d
+cp .env.example .env
+chmod 600 .env
+nano .env
 ```
 
-`migrate` выполняет Alembic до старта backend/worker/bot. Все миграции предназначены только для БД Shirin. Миграция `7b425c210cc9` удаляет служебную таблицу старой интеграции, сохраняя бизнес-данные. Связь с Market, HMAC proxy и интеграционные secrets больше не используются. PostgreSQL применяется в production; SQLite — в локальных demo/tests.
+Основные поля:
 
-Compose не занимает порты 80/443. В `deploy/Caddyfile.routes.example` подготовлены маршруты Shirin. При объединении с существующим gateway перенесите только `handle /shirin…` в уже имеющиеся блоки доменов, перед корневым handler; существующий корневой proxy сохраните. Завершающий `respond 404` в примере подходит для самостоятельного gateway. Проверьте объединённый файл до перезагрузки:
+| Поле | Значение |
+| --- | --- |
+| `SHIRIN_USER_BOT_TOKEN` | Token пользовательского бота Shirin |
+| `SHIRIN_ADMIN_BOT_TOKEN` | Token административного бота Shirin |
+| `SHIRIN_SUPERADMIN_BOT_TOKEN` | Token бота суперадминистратора Shirin |
+| `SHIRIN_SUPERADMIN_ALLOWED_IDS` | Разрешённые Telegram ID |
+| `SHIRIN_POSTGRES_PASSWORD` | Пароль БД Shirin; для существующей БД сохранить прежний |
+| `SHIRIN_DATABASE_URL` | `postgresql+asyncpg://shirin:ТОТ_ЖЕ_ПАРОЛЬ@postgres:5432/shirin` |
+| `SHIRIN_AUTH_ACCESS_SECRET` | Отдельный случайный secret, минимум 32 символа |
+| `SHIRIN_MINI_APP_URL` | `https://market.wekulcha.ru/shirin/` |
+| `SHIRIN_ADMIN_APP_URL` | `https://adminmarket.wekulcha.online/shirin/` |
+| `SHIRIN_SUPERADMIN_APP_URL` | `https://adminmarket.wekulcha.online/shirin/superadmin/` |
+| `SHIRIN_CORS_ALLOWED_ORIGINS` | `https://market.wekulcha.ru,https://adminmarket.wekulcha.online` |
+| `SHIRIN_TELEGRAM_PROXY_URL` | Рабочий HTTP proxy для Telegram, если нужен на этой ВМ |
+| `SHIRIN_WORK_GROUP_ID` | Рабочая группа; `0` сохраняет уведомления в очереди |
+| `SHIRIN_SHARED_GATEWAY` | `true` для существующего общего gateway |
+| `SHIRIN_SHARED_GATEWAY_CONTAINER` | Имя действующего gateway для подключения к сети Shirin; пусто для ручного подключения |
+
+Пароль в connection URL должен быть URL-encoded, если содержит специальные символы. Для новой БД можно использовать `openssl rand -hex 32`; access secret генерируется отдельной командой. Замена значения `.env` не меняет пароль уже инициализированного PostgreSQL.
+
+Запуск, обновление и остановка из корня Shirin:
+
+```bash
+./up.sh
+docker compose ps -a
+docker compose logs --tail=80 backend worker user_bot admin_bot superadmin_bot
+
+# При следующем обновлении кода:
+git pull --ff-only
+./up.sh
+
+# Остановка Shirin с сохранением volumes:
+./down.sh
+```
+
+Корневые `up.sh`/`down.sh` вызывают одноимённые скрипты в `deploy/`, как в Market/KULCHA. `up.sh` проверяет конфигурацию, ждёт PostgreSQL и применяет миграции перед стартом рабочих сервисов; предыдущий одиночный контейнер `bot` удаляется. Миграции выполняются только в БД Shirin; production не засеивается demo-скриптом. `down.sh` сохраняет БД и media volumes. Заранее настройте backup PostgreSQL и фотографий вне этой ВМ.
+
+По умолчанию запуск использует общий gateway. `./up.sh --shared` выбирает этот режим явно; `./up.sh --cloud` — отдельный публичный Caddy. Параметр команды имеет приоритет над `SHIRIN_SHARED_GATEWAY` в окружении/`.env`. Для скриптов нужен Docker Compose plugin 2.17+ с поддержкой `--wait`.
+
+## Общий Caddy
+
+Базовый Compose Shirin не занимает публичные порты 80/443. Он создаёт сеть `shirin_gateway`, имя которой задаётся `SHIRIN_GATEWAY_NETWORK`. Контейнеру действующего Caddy нужен доступ к этой сети. Узнать его имя:
+
+```bash
+docker ps --format '{{.Names}}\t{{.Ports}}'
+```
+
+Подключить выбранный gateway к сети Shirin можно после запуска приложения:
+
+```bash
+docker network connect shirin_gateway ИМЯ_КОНТЕЙНЕРА_CADDY
+```
+
+Имя сети заменить фактическим, если оно переопределено в `.env`. Закрепите подключение в Compose существующего gateway как внешнюю сеть, чтобы оно сохранялось после пересоздания контейнера.
+
+Если указать `SHIRIN_SHARED_GATEWAY_CONTAINER`, `up.sh` подключит этот уже работающий контейнер к сети Shirin; повторный запуск не добавляет дубликат. Пустое значение не меняет сети соседних контейнеров. Скрипт не переписывает действующий Caddyfile.
+
+В `deploy/Caddyfile.routes.example` подготовлены маршруты Shirin. В уже существующие блоки `market.wekulcha.ru` и `adminmarket.wekulcha.online` перенесите только `handle /shirin…` перед корневым proxy. Существующие root handlers оставьте. Полная замена действующего Caddyfile примером нарушит корневые маршруты Market.
+
+До reload проверьте объединённый файл:
 
 ```bash
 caddy validate --config /path/to/merged/Caddyfile --adapter caddyfile
 ```
 
-## Telegram и суперадминистратор
+DNS для этого сценария менять не нужно. Общий gateway маршрутизирует HTTP; данные, сессии и права принадлежат Shirin, связь с backend Market удалена.
 
-`/start` бота Shirin выдаёт кнопки Mini App, панели сотрудников по правам и суперадминки по `SHIRIN_SUPERADMIN_ALLOWED_IDS`. Пустой allowlist запрещает вход всем. `SHIRIN_SUPERADMIN_APP_URL` указывает на отдельный интерфейс; каждую привилегированную операцию проверяет backend. Инструкции — [superadmin.md](superadmin.md) и [telegram.md](telegram.md).
+## Telegram и хранилище
 
-Polling и webhook взаимоисключающие. Скрипты не регистрируют/удаляют webhook автоматически. Outbox worker работает постоянно; при незаданной группе/token сохраняет задания в PENDING. Для webhook запускается один bot consumer, который читает сохранённые updates; backend проверяет secret и дедуплицирует их.
+В личных диалогах каждого из трёх ботов `/start` открывает свою панель. User bot — каталог, admin bot — административную панель для разрешённых сотрудников, superadmin bot — суперадминку для allowlist. Настройка polling/webhook, рабочей группы, proxy и проверка входа описаны в [telegram.md](telegram.md).
+
+Worker уведомлений отправляет заказы через admin bot. Его нужно добавить в рабочую группу и предоставить право отправки сообщений/фото. При незаданной группе уведомления сохраняются в outbox и ждут настройки; изменение режима polling/webhook оператор выполняет отдельно.
+
+Фото товаров сохраняются в настроенное Object Storage, если заполнены bucket, keys и public URL; при пустых S3-полях используется media volume. Фото магазинов выдаются с проверкой доступа из закрытого хранилища. Настроенные значения не нужно очищать ради обновления ботов.
+
+## Отдельная новая ВМ
+
+Этот вариант нужен только при намеренном размещении Shirin на отдельной ВМ. `deploy/docker-compose.cloud.yml` добавляет публичный Caddy; для него нужны свои домены/IP и свободные 80/443. Такой gateway не запускают вторым на сервере с действующим публичным Caddy. Поля консоли, HOST, `.env` и команды — в [yandex-cloud.md](yandex-cloud.md).
 
 ## Проверка production-сборок локальным Caddy
 
@@ -57,6 +118,4 @@ cd user_panel
 SHIRIN_BUILT_PREVIEW=1 npx playwright test
 ```
 
-Порты `8093`/`8094`/`8095` обслуживают готовые сборки Mini App/сотрудников/суперадминки. Суперадминка дополнительно доступна через `8094/shirin/superadmin/`. Проверки включают прямые вложенные URL, refresh, вход/отказ, права, оплату/доставку и logout.
-
-Docker daemon здесь выключен: Compose проверен, контейнерные images не запускались. Реальные HTTPS/Telegram/S3 требуют выбранного серверного или тестового окружения. Размещение на сервере этой локальной работой не выполнено.
+Порты `8093`/`8094`/`8095` обслуживают готовые сборки Mini App/сотрудников/суперадминки. Суперадминка дополнительно доступна через `8094/shirin/superadmin/`. Эти команды относятся к синтетическому demo-окружению; успешная локальная проверка не означает размещение на сервере. Актуальные выполненные проверки находятся в [test-results.md](test-results.md).

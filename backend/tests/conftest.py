@@ -9,6 +9,9 @@ os.environ["SHIRIN_ENVIRONMENT"] = "test"
 os.environ["SHIRIN_DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", f"sqlite+aiosqlite:////private/tmp/shirin-tests-{os.getpid()}.db")
 os.environ["SHIRIN_AUTH_ACCESS_SECRET"] = "test-shirin-access-secret-unique-123456789"
 os.environ["SHIRIN_USER_BOT_TOKEN"] = "123456:synthetic-telegram-test-secret"
+os.environ["SHIRIN_ADMIN_BOT_TOKEN"] = "234567:synthetic-admin-test-secret"
+os.environ["SHIRIN_SUPERADMIN_BOT_TOKEN"] = "345678:synthetic-superadmin-test-secret"
+os.environ["SHIRIN_TELEGRAM_PROXY_URL"] = ""
 os.environ["SHIRIN_AUTH_COOKIE_SECURE"] = "false"
 os.environ["SHIRIN_SUPERADMIN_ALLOWED_IDS"] = "101"
 os.environ["SHIRIN_UPLOADS_DIR"] = f"/private/tmp/shirin-test-media-{os.getpid()}"
@@ -24,13 +27,13 @@ from app.models import Staff
 from app.services.session_auth import ensure_customer
 
 
-def init_data(uid=101, age=0, extra=None):
+def init_data(uid=101, age=0, extra=None, role="user"):
     values = {
         "auth_date": str(int(time.time()) - age),
         "user": json.dumps({"id": uid, "first_name": f"Test {uid}"}, ensure_ascii=False),
         **(extra or {}),
     }
-    secret = hmac.new(b"WebAppData", get_settings().user_bot_token.encode(), hashlib.sha256).digest()
+    secret = hmac.new(b"WebAppData", get_settings().bot_token_for(role).encode(), hashlib.sha256).digest()
     values["hash"] = hmac.new(secret, "\n".join(f"{k}={v}" for k, v in sorted(values.items())).encode(), hashlib.sha256).hexdigest()
     return urlencode(values)
 

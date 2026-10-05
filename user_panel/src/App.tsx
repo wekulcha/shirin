@@ -67,8 +67,8 @@ function Cart() {
 }
 
 function Settings() {
-  const { t, lang, setLang, user } = useApp();
-  return <div className="page"><h1>{t('settings')}</h1><div className="card"><h3>{user?.username}</h3><div className="tabs"><button onClick={() => setLang('ru')} className={lang === 'ru' ? 'selected' : ''}>Русский</button><button onClick={() => setLang('uz')} className={lang === 'uz' ? 'selected' : ''}>O‘zbekcha</button></div><p>{t('currency')}: UZS</p>{(user?.permissions.length || user?.superadmin) ? <a className="button" href={import.meta.env.VITE_ADMIN_APP_URL ?? 'https://adminmarket.wekulcha.online/shirin/'}>{t('admin')}</a> : null}</div></div>;
+  const { t, lang, setLang, user, botLinks } = useApp();
+  return <div className="page"><h1>{t('settings')}</h1><div className="card"><h3>{user?.username}</h3><div className="tabs"><button onClick={() => setLang('ru')} className={lang === 'ru' ? 'selected' : ''}>Русский</button><button onClick={() => setLang('uz')} className={lang === 'uz' ? 'selected' : ''}>O‘zbekcha</button></div><p>{t('currency')}: UZS</p>{(user?.permissions.length || user?.superadmin) ? <a className="button" href={botLinks?.admin.url || import.meta.env.VITE_ADMIN_APP_URL || 'https://adminmarket.wekulcha.online/shirin/'}>{t('admin')}</a> : null}{user?.superadmin && botLinks?.superadmin.url ? <a className="button" href={botLinks.superadmin.url}>{t('superadmin')}</a> : null}</div></div>;
 }
 
 const router = createBrowserRouter([{ path: '/', element: <Shell />, children: [

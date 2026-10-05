@@ -1,190 +1,148 @@
-# Яндекс Облако: отдельная ВМ для Shirin
+# Shirin в Яндекс Облаке
 
-Подготовлены Compose с публичным Caddy и шаблон production `.env`. Инструкция рассчитана на новую ВМ Ubuntu 24.04 x86_64. Стартовые 2 vCPU / 4 ГБ RAM — рекомендация для небольшой нагрузки; нагрузочное тестирование не выполнялось. Платные ресурсы и DNS этой локальной работой не создавались.
+Если Market/KULCHA уже работают на `kulcha-test-vm`, Shirin можно запустить **на этой же ВМ**: отдельные контейнеры и БД, три бота и свои маршруты `/shirin/` в общем Caddy. Существующие домены, группа безопасности и DNS сохраняются. Новая ВМ и новые домены для такого запуска не требуются.
 
-## 1. Виртуальная машина
+## 1. Код на существующей ВМ
 
-В [консоли Яндекс Облака](https://console.yandex.cloud/) выбрать облако и каталог, например создать каталог `shirin`. Нужен активный платёжный аккаунт. Открыть Compute Cloud → Виртуальные машины → Создать виртуальную машину. [Официальная инструкция](https://yandex.cloud/ru/docs/compute/operations/vm-create/create-linux-vm).
-
-| Поле | Рекомендуемое значение для первого запуска |
-| --- | --- |
-| Имя | `shirin-prod` |
-| Образ | Ubuntu 24.04 LTS, x86_64 |
-| Зона | Например `ru-central1-a` |
-| Диск | SSD, 40 ГБ |
-| Вычислительные ресурсы | 2 vCPU, доля 100%, RAM 4 ГБ |
-| Прерываемая | Выключено |
-| Сеть | Создать `shirin-network` или выбрать подходящую |
-| Подсеть | В сети и зоне этой ВМ |
-| Публичный IP | Автоматически; затем сделать статическим |
-| Группа безопасности | `shirin-web`, правила ниже |
-| Доступ | SSH-ключ |
-| Логин | `ubuntu` |
-| SSH-ключ | Открытый ключ с Mac, файл `.pub` |
-| Сервисный аккаунт | Для этого запуска можно оставить пустым |
-
-Для отдельного ключа ВМ выполнить на Mac, выбрав другое имя файла, если такой ключ уже существует:
+После commit/push новых файлов на Mac в SSH-сессии на сервере:
 
 ```bash
-ssh-keygen -t ed25519 -f ~/.ssh/shirin_yc -C "shirin-yc"
-cat ~/.ssh/shirin_yc.pub
+cd ~/shirin
+git pull --ff-only
+docker compose version
 ```
 
-В поле ключа консоли вставляется только строка из `.pub`. После создания ВМ открыть Virtual Private Cloud → Публичные IP-адреса → адрес ВМ → Сделать статическим. [Инструкция по статическому IP](https://yandex.cloud/ru/docs/vpc/operations/set-static-ip). Стоимость ВМ и IP проверять в консоли перед созданием.
+Нужны Docker Engine и Compose plugin 2.17+ (`up --wait`). Python/Node.js устанавливаются в images; отдельно на сервере их устанавливать не нужно. Если репозиторий ещё не клонирован, используйте GitHub-аккаунт/deploy key с доступом к `wekulcha/shirin` и клонируйте его в отдельную папку `~/shirin`.
 
-## 2. Группа безопасности
+## 2. Заполнение `.env`
 
-В Virtual Private Cloud → Группы безопасности создать `shirin-web` в сети ВМ и назначить её сетевому интерфейсу ВМ. В правилах выбрать источник/назначение «Диапазон адресов». [Инструкция по полям правил](https://yandex.cloud/ru/docs/vpc/operations/security-group-create).
-
-| Направление | Протокол | Порты | IPv4 CIDR |
-| --- | --- | --- | --- |
-| Входящий | TCP | 22 | Твой текущий публичный IPv4 с `/32` |
-| Входящий | TCP | 80 | `0.0.0.0/0` |
-| Входящий | TCP | 443 | `0.0.0.0/0` |
-| Исходящий | Любой | Все | `0.0.0.0/0` |
-
-При смене домашнего/VPN IP обновить правило SSH. PostgreSQL и backend остаются во внутренних контейнерных сетях.
-
-## 3. Два домена
-
-Примеры ниже используют новые поддомены `shirin.wekulcha.ru` и `adminshirin.wekulcha.ru`. Эти имена здесь не зарегистрированы и не настроены. Можно выбрать любые два разных имени на домене, которым вы управляете.
-
-У действующего DNS-провайдера домена добавить:
-
-| Имя в зоне `wekulcha.ru` | Тип | Значение | TTL |
-| --- | --- | --- | --- |
-| `shirin` | A | Статический публичный IPv4 новой ВМ | 300 |
-| `adminshirin` | A | Тот же IPv4 | 300 |
-
-Если зона уже обслуживается Cloud DNS, записи создаются там: [инструкция](https://yandex.cloud/ru/docs/dns/operations/resource-record-create). Новая зона Cloud DNS сама по себе не меняет делегирование домена. Вносить записи нужно у его текущего DNS-провайдера. Существующие `market` и `adminmarket` обслуживают Market и сохраняются.
-
-## 4. Код и Docker на сервере
-
-На Mac отправить проект:
+Рабочий файл — `~/shirin/.env`, рядом с `docker-compose.yml`. Если он уже существует, **сохраните его и дополните**, не копируйте поверх шаблон:
 
 ```bash
-cd /Users/amonulloh/Downloads/klch_project/shirin
-git push origin main
-ssh -i ~/.ssh/shirin_yc ubuntu@VM_IP
-```
-
-`VM_IP` заменить фактическим IP ВМ. Дальнейшие команды выполнять в SSH-сессии **на сервере**.
-
-Установить Docker Engine и Compose plugin по [официальной инструкции Ubuntu](https://docs.docker.com/engine/install/ubuntu/), раздел Install using the apt repository. Затем проверить `sudo docker compose version`. Node.js и Python на ВМ отдельно не устанавливаются: они находятся в контейнерах. Для Git нужны `git` и `openssh-client`, для генерации secrets — `openssl`.
-
-Приватный репозиторий удобно читать отдельным GitHub deploy key. На ВМ:
-
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/shirin_github -C "shirin-prod-deploy"
-cat ~/.ssh/shirin_github.pub
-```
-
-В GitHub: `wekulcha/shirin` → Settings → Deploy keys → Add deploy key. Title: `shirin-prod`; Key: содержимое `.pub`; Allow write access оставить выключенным. Если ключ защищён passphrase, добавьте его в SSH agent для текущей сессии. [Deploy keys GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys).
-
-На ВМ:
-
-```bash
-mkdir -p ~/apps
-cd ~/apps
-GIT_SSH_COMMAND='ssh -i ~/.ssh/shirin_github -o IdentitiesOnly=yes' git clone git@github.com:wekulcha/shirin.git shirin
-cd shirin
-git config core.sshCommand 'ssh -i ~/.ssh/shirin_github -o IdentitiesOnly=yes'
-```
-
-## 5. Рабочий `.env`
-
-Рабочий файл находится **в корне Shirin**, рядом с `docker-compose.yml`: `~/apps/shirin/.env`. Шаблон `deploy/yandex-cloud.env.example` включает HOST-переменные публичного gateway. Обычный `.env.example` подходит для базового Compose с отдельно настроенным gateway.
-
-На сервере, из `~/apps/shirin`:
-
-```bash
-cp deploy/yandex-cloud.env.example .env
-chmod 600 .env
-openssl rand -hex 32
-openssl rand -hex 32
+cd ~/shirin
+cp .env .env.backup
+chmod 600 .env .env.backup
 nano .env
 ```
 
-Если рабочая `.env` уже существует, сначала сохранить её отдельную резервную копию, затем редактировать выбранный файл. Команда `cp` заменяет существующий файл. Локальная `.env` на Mac настроена для demo SQLite; её на сервер не переносить.
+Только для первого запуска, когда файла ещё нет:
 
-Первое случайное значение использовать как пароль БД, второе — как отдельный access secret. В nano сохранить Ctrl+O, Enter; выйти Ctrl+X.
+```bash
+cp .env.example .env
+chmod 600 .env
+nano .env
+```
+
+В nano сохранить Ctrl+O, Enter; выйти Ctrl+X.
 
 | Переменная | Что вписать |
 | --- | --- |
-| `SHIRIN_PUBLIC_HOST` | `shirin.wekulcha.ru`, либо свой домен, без схемы и пути |
-| `SHIRIN_ADMIN_HOST` | `adminshirin.wekulcha.ru`, либо свой второй домен |
-| `SHIRIN_POSTGRES_PASSWORD` | Первое случайное значение |
+| `SHIRIN_ENVIRONMENT` | `production` |
+| `SHIRIN_USER_BOT_TOKEN` | Token user bot **Shirin**, из BotFather |
+| `SHIRIN_ADMIN_BOT_TOKEN` | Token admin bot **Shirin** |
+| `SHIRIN_SUPERADMIN_BOT_TOKEN` | Token superadmin/ops bot **Shirin** |
+| `SHIRIN_BOT_USERNAME` | Username user bot без `@` |
+| `SHIRIN_USER_BOT_USERNAME` | Username user bot без `@`; имеет приоритет над `SHIRIN_BOT_USERNAME` |
+| `SHIRIN_ADMIN_BOT_USERNAME` | Username admin bot без `@` |
+| `SHIRIN_SUPERADMIN_BOT_USERNAME` | Username superadmin/ops bot без `@` |
+| `SHIRIN_SUPERADMIN_ALLOWED_IDS` | Твой числовой Telegram ID; несколько — через запятую или JSON-массив `[123456789,987654321]` |
+| `SHIRIN_POSTGRES_PASSWORD` | Прежний пароль существующей БД Shirin; случайный пароль только для новой БД |
 | `SHIRIN_DATABASE_URL` | `postgresql+asyncpg://shirin:ТОТ_ЖЕ_ПАРОЛЬ@postgres:5432/shirin` |
-| `SHIRIN_AUTH_ACCESS_SECRET` | Второе случайное значение |
-| `SHIRIN_USER_BOT_TOKEN` | Token отдельного бота Shirin из BotFather |
-| `SHIRIN_BOT_USERNAME` | Имя этого бота без `@` |
-| `SHIRIN_SUPERADMIN_ALLOWED_IDS` | Твой числовой Telegram ID; несколько — через запятую |
-| `SHIRIN_MINI_APP_URL` | `https://shirin.wekulcha.ru/shirin/` |
-| `SHIRIN_ADMIN_APP_URL` | `https://adminshirin.wekulcha.ru/shirin/` |
-| `SHIRIN_SUPERADMIN_APP_URL` | `https://adminshirin.wekulcha.ru/shirin/superadmin/` |
-| `SHIRIN_CORS_ALLOWED_ORIGINS` | `https://shirin.wekulcha.ru,https://adminshirin.wekulcha.ru` |
-| `SHIRIN_WORK_GROUP_ID` | `0` для запуска без групповых уведомлений; затем ID выбранной группы |
-| `SHIRIN_WORK_GROUP_TOPIC_ID` | `0`, если отдельная forum-тема не используется |
-| `SHIRIN_BOT_MODE` | Оставить `polling` для нового бота |
-| `SHIRIN_WEBHOOK_SECRET` | В polling пусто |
-| `SHIRIN_AUTH_COOKIE_DOMAIN` | Пусто |
+| `SHIRIN_AUTH_ACCESS_SECRET` | Сохранить существующий secret; для первого запуска создать отдельный случайный secret 32+ символов |
+| `SHIRIN_MINI_APP_URL` | `https://market.wekulcha.ru/shirin/` |
+| `SHIRIN_ADMIN_APP_URL` | `https://adminmarket.wekulcha.online/shirin/` |
+| `SHIRIN_SUPERADMIN_APP_URL` | `https://adminmarket.wekulcha.online/shirin/superadmin/` |
+| `SHIRIN_CORS_ALLOWED_ORIGINS` | `https://market.wekulcha.ru,https://adminmarket.wekulcha.online` |
+| `SHIRIN_SHARED_GATEWAY` | `true` |
+| `SHIRIN_GATEWAY_NETWORK` | `shirin_gateway`, если собственное имя сети не задано |
+| `SHIRIN_SHARED_GATEWAY_CONTAINER` | Имя уже работающего gateway-контейнера; можно оставить пустым и подключить сеть вручную |
+| `SHIRIN_BOT_MODE` | `polling` для этих новых ботов; если настроен webhook, см. [telegram.md](telegram.md) |
+| `SHIRIN_TELEGRAM_PROXY_URL` | Используемый на ВМ Telegram HTTP proxy, если требуется; иначе пусто |
+| `SHIRIN_WORK_GROUP_ID` | ID рабочей группы; `0` для запуска без отправки уведомлений |
+| `SHIRIN_WORK_GROUP_TOPIC_ID` | ID темы либо `0` |
+| `SHIRIN_GROUP_LANGUAGE` | `ru` или `uz` |
+| `SHIRIN_WEBHOOK_SECRET` | В polling не требуется; для webhook отдельное случайное значение |
+| `SHIRIN_AUTH_COOKIE_DOMAIN` | Пусто для cookies на hostname соответствующей панели |
 | `SHIRIN_AUTH_COOKIE_SECURE` | `true` |
-| Object Storage bucket/keys/public URL | Можно оставить пустыми: фото хранятся в Docker volume |
-| Остальные значения шаблона | Оставить как есть |
+| `SHIRIN_TIMEZONE` | `Asia/Tashkent` |
+| `SHIRIN_UPLOADS_DIR` | `/app/uploads` |
+| Object Storage bucket/keys/public URL | Сохранить настроенное хранилище Shirin; если не используется, оставить пустыми для media volume |
 
-При замене доменов одновременно обновить оба HOST, три URL и CORS. В CORS только origins без пути. Hex-пароль не требует URL-encoding. Значения token/password/access secret остаются на сервере; `.env` исключена из Git.
+Для новой БД и первого auth secret дважды выполните `openssl rand -hex 32`, используя разные результаты. Пароль в URL должен совпадать с `SHIRIN_POSTGRES_PASSWORD`. Изменение `.env` не меняет пароль существующей PostgreSQL: при обновлении сохраняйте оба прежних значения.
 
-Бот создаётся отдельно через BotFather `/newbot`; Telegram ID суперадминистратора — число, а не username. Если ID неизвестен, до запуска bot-контейнера отправьте `/start` своему новому боту и получите `message.from.id` через его Bot API `getUpdates`. Для нового бота без webhook можно прочитать только ID таким скриптом на сервере после заполнения token и secrets:
+Для admin/superadmin bots используются **два отдельных token**. Нельзя ставить один token во все три поля: три pollers одного бота будут конфликтовать. Секреты остаются на сервере; `.env` исключена из Git. Локальная demo `.env` с SQLite на production не подходит.
 
-```bash
-sudo docker compose -f docker-compose.yml -f deploy/docker-compose.cloud.yml build bot
-sudo docker compose -f docker-compose.yml -f deploy/docker-compose.cloud.yml run --rm -T --no-deps bot python - <<'PY'
-import asyncio
-from aiogram import Bot
-from app.config import get_settings
+## 3. Запуск трёх ботов и панелей
 
-async def main():
-    async with Bot(get_settings().user_bot_token) as bot:
-        for update in await bot.get_updates():
-            message = update.message
-            if message and message.chat.type == 'private' and message.from_user:
-                print('Telegram ID:', message.from_user.id)
-
-asyncio.run(main())
-PY
-```
-
-Если вывода нет, отправить боту новое сообщение и повторить. Вписать свой ID в `.env` перед запуском. Настройка Telegram — [telegram.md](telegram.md).
-
-## 6. Запуск и проверка
-
-На сервере из `~/apps/shirin`:
+На существующей ВМ из `~/shirin`:
 
 ```bash
-sudo docker compose -f docker-compose.yml -f deploy/docker-compose.cloud.yml config -q
-sudo docker compose -f docker-compose.yml -f deploy/docker-compose.cloud.yml up -d --build
-sudo docker compose -f docker-compose.yml -f deploy/docker-compose.cloud.yml ps -a
-sudo docker compose -f docker-compose.yml -f deploy/docker-compose.cloud.yml logs --tail=80 backend bot worker gateway
+./up.sh --shared
+docker compose ps -a
+docker compose logs --tail=80 backend worker user_bot admin_bot superadmin_bot
 ```
 
-`migrate` должен завершиться с кодом 0; затем стартует backend. Caddy получит HTTPS-сертификаты, когда оба имени разрешаются в IP ВМ и доступны порты 80/443; сертификаты сохраняются в `caddy_data`. [Автоматический HTTPS Caddy](https://caddyserver.com/docs/automatic-https).
+Если Docker требует sudo, выполняйте `sudo ./up.sh --shared`. Скрипт использует `.env`, проверяет Compose, ждёт PostgreSQL, применяет миграции и запускает три панели/бота и остальные сервисы. `migrate` должен завершиться с кодом 0. Если указан `SHIRIN_SHARED_GATEWAY_CONTAINER`, скрипт подключает этот действующий контейнер к сети Shirin; Caddyfile автоматически не переписывается.
 
-Проверить `https://shirin.wekulcha.ru/shirin/api/health`: ожидается `{"status":"ok","project":"shirin"}`. Панели доступны по URL из `.env`; без Telegram-сессии показывают вход. База создаётся пустой, demo-товары на сервер не добавляются.
+Названия контейнеров ботов: `shirin-user-bot`, `shirin-admin-bot`, `shirin-superadmin-bot`. Для обновления повторяйте `git pull --ff-only`, затем `./up.sh`; для остановки только Shirin используйте `./down.sh`. База и фотографии сохраняются в volumes.
 
-В BotFather `/mybots` выбрать Shirin → Bot Settings → Menu Button, задать `SHIRIN_MINI_APP_URL`. В личном диалоге с ботом отправить `/start`: пользователь из allowlist увидит кнопку «Суперадмин Shirin». Открыть её и добавить реальные товары/Excel.
+## 4. Маршруты в существующем Caddy
 
-При группе `0` уведомления ждут в outbox. Для доставки добавить бота в выбранную группу, заполнить её ID и при необходимости topic ID в `.env`, повторить `up -d`. Старый бот с webhook требует отдельного согласования режима: приложение webhook не удаляет.
+В `deploy/Caddyfile.routes.example` есть готовые правила `/shirin/`. Добавьте их в действующие блоки `market.wekulcha.ru` и `adminmarket.wekulcha.online` перед proxy корневых приложений. **Существующие корневые маршруты Market оставьте.** Gateway должен быть подключён к сети `shirin_gateway`; способ закрепить сеть и проверить merged Caddyfile — в [deployment.md](deployment.md).
 
-## 7. Обновления и данные
+На этой же ВМ не нужно запускать `./up.sh --cloud`: он добавляет собственный Caddy на 80/443, которые уже заняты действующим gateway. DNS существующих Market-доменов не меняется.
 
-После commit/push на Mac выполнить на сервере:
+После добавления маршрутов проверьте:
 
 ```bash
-cd ~/apps/shirin
-git pull --ff-only
-sudo docker compose -f docker-compose.yml -f deploy/docker-compose.cloud.yml up -d --build
+curl -fsS https://market.wekulcha.ru/shirin/api/health
 ```
 
-База и фото сохраняются в volumes. Команда `down -v` удаляет эти данные; для обновлений используйте `up -d --build`. До рабочих заказов настройте backup PostgreSQL и media volume вне ВМ.
+Ожидается `{"status":"ok","project":"shirin"}`. Mini App, admin и superadmin panel должны открываться по своим URL; без собственной сессии требуется вход через соответствующего бота. Проверка backend-контейнера сама по себе не проверяет маршруты внешнего Caddy.
 
-Compose/Caddy-шаблоны проверены локально; Docker daemon здесь выключен, контейнеры на облачной ВМ ещё не запускались. При размещении рядом с уже работающим Market нужен его существующий gateway и [инструкция объединения маршрутов](deployment.md); файл `docker-compose.cloud.yml` добавляет второй gateway на 80/443 и предназначен для отдельной ВМ.
+## 5. Telegram и первый вход
+
+В BotFather для **каждого** бота настройте Menu Button на URL соответствующей панели из `.env`. Затем:
+
+1. User bot: `/start` → каталог Shirin.
+2. Superadmin/ops bot: `/start` под Telegram ID из allowlist → «Суперадмин Shirin». Добавьте товары/Excel и разрешённым сотрудникам выдайте существующие права.
+3. Admin bot: `/start` сотрудника → административная панель с его правами.
+4. Добавьте admin bot Shirin в рабочую группу, заполните group/topic ID. Оформите тестовый заказ и проверьте уведомление и кнопки статусов.
+
+Подпись входа проверяется по token бота той панели, которую открывает пользователь. Пустой allowlist запрещает суперадминистративный вход. Группа `0` оставляет уведомления в outbox до настройки. Подробнее — [telegram.md](telegram.md) и [superadmin.md](superadmin.md).
+
+## 6. Если нужна отдельная новая ВМ
+
+Это отдельный способ размещения. Создайте Linux-ВМ в [консоли Яндекс Облака](https://console.yandex.cloud/) с SSH-ключом и публичным статическим IP; описание полей — в [официальной инструкции](https://yandex.cloud/ru/docs/compute/operations/vm-create/create-linux-vm). В группе безопасности откройте TCP 22 только со своего IP и TCP 80/443 для HTTPS; PostgreSQL оставьте внутри Compose.
+
+Установите Docker по [официальной инструкции Ubuntu](https://docs.docker.com/engine/install/ubuntu/), затем клонируйте Shirin в отдельную папку. Для этой новой ВМ используйте `deploy/yandex-cloud.env.example`, заполните три token и secrets. Выберите собственные домены и направьте их A-записи на IP новой ВМ. Существующие Market-домены не перенаправляйте: это изменит доступ к Market.
+
+Согласованно задайте `SHIRIN_PUBLIC_HOST`/`SHIRIN_ADMIN_HOST`, три URL и CORS. HOST — только имя без `https://` и пути. Например, если отдельно выбраны `shirin.example.com` и `adminshirin.example.com`:
+
+```dotenv
+SHIRIN_PUBLIC_HOST=shirin.example.com
+SHIRIN_ADMIN_HOST=adminshirin.example.com
+SHIRIN_MINI_APP_URL=https://shirin.example.com/shirin/
+SHIRIN_ADMIN_APP_URL=https://adminshirin.example.com/shirin/
+SHIRIN_SUPERADMIN_APP_URL=https://adminshirin.example.com/shirin/superadmin/
+SHIRIN_CORS_ALLOWED_ORIGINS=https://shirin.example.com,https://adminshirin.example.com
+SHIRIN_SHARED_GATEWAY=false
+```
+
+На новой ВМ без другого gateway:
+
+```bash
+./up.sh --cloud
+docker compose -f docker-compose.yml -f deploy/docker-compose.cloud.yml ps -a
+docker compose -f docker-compose.yml -f deploy/docker-compose.cloud.yml logs --tail=80 gateway user_bot admin_bot superadmin_bot
+# Остановка с сохранением данных:
+./down.sh --cloud
+```
+
+Cloud override добавляет Caddy и сохраняет сертификаты в volume. HTTPS требует, чтобы HOST-имена разрешались в IP этой ВМ и 80/443 были доступны. [Автоматический HTTPS Caddy](https://caddyserver.com/docs/automatic-https). Настройки DNS меняет только оператор выбранного размещения; приложение их автоматически не меняет.
+
+## 7. Данные и выполненные проверки
+
+Backup PostgreSQL и media volume храните вне ВМ. Для обновлений используйте `up.sh`; `down.sh` сохраняет данные. Команда Docker `down -v` удаляет volumes и для обычного обновления не нужна.
+
+Локальная подготовка файлов не выполняет deployment на ВМ, не меняет живые webhook и не применяет миграции к production-БД. Фактически выполненные проверки описаны в [test-results.md](test-results.md).

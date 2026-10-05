@@ -25,4 +25,6 @@ Backend: Python, FastAPI ≥0.115, SQLAlchemy async ≥2.0, PostgreSQL/asyncpg, 
 
 По последующему запросу пользователя интеграция Market удалена обратным коммитом `873b22f`, ветка `feature/shirin-integration` в репозитории `../market`. Временная рабочая копия интеграции удалена после сохранения коммита. Теперь `superadmin_panel` — отдельная сборка Shirin с собственной Telegram-сессией и серверным allowlist. Подписанный proxy и его служебная таблица удалены; рабочие папки исходных проектов сохранены.
 
+5 октября по явному запросу пользователя прежняя схема с одним ботом заменена тремя отдельными ботами Shirin — user/admin/superadmin. Добавлены скрипты up.sh/down.sh, входы по соответствующим token и раздельные refresh-сессии. Исходные домены и общий gateway сохранены; описание «собственный бот» выше относится к первоначальному аудиту.
+
 Официальная Telegram документация проверена: https://core.telegram.org/bots/webapps#locationmanager, https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app, https://core.telegram.org/bots/api#setwebhook. LocationManager.init/getLocation поддерживается с Bot API 8.0; ручной адрес/карта остаются доступны. Не используем вымышленную отправку Location из Mini App.

@@ -1,6 +1,7 @@
+import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -10,6 +11,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://shirin:shirin@localhost:5444/shirin"
     environment: str = "production"
     user_bot_token: str = ""
+    admin_bot_token: str = ""
+    superadmin_bot_token: str = ""
+    bot_role: Literal["user", "admin", "superadmin"] = "user"
     auth_access_secret: str = ""
     auth_access_ttl_minutes: int = 15
     auth_refresh_ttl_days: int = 30
@@ -18,8 +22,12 @@ class Settings(BaseSettings):
     init_data_ttl_seconds: int = 3600
     superadmin_allowed_ids: Annotated[list[int], NoDecode] = []
     webhook_secret: str = ""
-    bot_mode: str = "polling"
+    bot_mode: Literal["polling", "webhook"] = "polling"
+    telegram_proxy_url: str = ""
     bot_username: str = ""
+    user_bot_username: str = ""
+    admin_bot_username: str = ""
+    superadmin_bot_username: str = ""
     work_group_id: int = 0
     work_group_topic_id: int = 0
     group_language: str = "ru"
@@ -50,8 +58,23 @@ class Settings(BaseSettings):
     @classmethod
     def csv(cls, value, info):
         if isinstance(value, str):
-            value = [s.strip() for s in value.split(",") if s.strip()]
+            value = json.loads(value) if value.strip().startswith("[") else [s.strip() for s in value.split(",") if s.strip()]
         return [int(s) for s in value] if info.field_name == "superadmin_allowed_ids" else value
+
+    @field_validator("bot_username", "user_bot_username", "admin_bot_username", "superadmin_bot_username", mode="before")
+    @classmethod
+    def username(cls, value):
+        return value.strip().lstrip("@") if isinstance(value, str) else value
+
+    def bot_token_for(self, role: str) -> str:
+        return {"user": self.user_bot_token, "admin": self.admin_bot_token, "superadmin": self.superadmin_bot_token}[role]
+
+    def bot_username_for(self, role: str) -> str:
+        return {
+            "user": self.user_bot_username or self.bot_username,
+            "admin": self.admin_bot_username,
+            "superadmin": self.superadmin_bot_username,
+        }[role]
 
     @model_validator(mode="after")
     def check_environment(self):

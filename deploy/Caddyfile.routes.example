@@ -17,7 +17,7 @@ market.wekulcha.ru {
 		reverse_proxy shirin-backend:8000
 	}
 	handle /shirin {
-		redir /shirin/ 308
+		redir * /shirin/ 308
 	}
 	handle /shirin/* {
 		reverse_proxy shirin-user-panel:80
@@ -38,13 +38,13 @@ adminmarket.wekulcha.online {
 		reverse_proxy shirin-backend:8000
 	}
 	handle /shirin/superadmin {
-		redir /shirin/superadmin/ 308
+		redir * /shirin/superadmin/ 308
 	}
 	handle /shirin/superadmin/* {
 		reverse_proxy shirin-superadmin-panel:80
 	}
 	handle /shirin {
-		redir /shirin/ 308
+		redir * /shirin/ 308
 	}
 	handle /shirin/* {
 		reverse_proxy shirin-admin-panel:80

@@ -1,4 +1,5 @@
 import hmac
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -57,9 +58,15 @@ async def health():
 
 
 @app.post("/shirin/webhooks/telegram/")
-async def webhook(request: Request):
+@app.post("/shirin/webhooks/telegram/{bot_role}/")
+async def webhook(request: Request, bot_role: Literal["user", "admin", "superadmin"] = "user"):
     received = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    if settings.bot_mode != "webhook" or not settings.webhook_secret or not hmac.compare_digest(received, settings.webhook_secret):
+    if (
+        settings.bot_mode != "webhook"
+        or not settings.bot_token_for(bot_role)
+        or not settings.webhook_secret
+        or not hmac.compare_digest(received, settings.webhook_secret)
+    ):
         raise HTTPException(403, "invalid_webhook")
     if int(request.headers.get("Content-Length", "0")) > 1048576:
         raise HTTPException(413, "file_too_large")
@@ -71,8 +78,8 @@ async def webhook(request: Request):
     except (ValueError, TypeError):
         raise HTTPException(422, "invalid_update") from None
     async with async_session() as db:
-        if not await db.get(WebhookUpdate, update.update_id):
-            db.add(WebhookUpdate(id=update.update_id, payload=body))
+        if not await db.get(WebhookUpdate, (update.update_id, bot_role)):
+            db.add(WebhookUpdate(id=update.update_id, bot_role=bot_role, payload=body))
             try:
                 await db.commit()
             except IntegrityError:

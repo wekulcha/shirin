@@ -10,9 +10,9 @@ const built = Boolean(process.env.SHIRIN_BUILT_PREVIEW);
 const mini = 'http://localhost:' + (built ? '8093' : '5183');
 const admin = 'http://localhost:' + (built ? '8094' : '5184');
 const superadmin = 'http://localhost:' + (built ? '8095' : '5185');
-function login(uid: number) {
+function login(uid: number, role: 'user' | 'admin' | 'superadmin' = 'user') {
   const values: Record<string, string> = { auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: uid, first_name: 'Demo' }) };
-  const secret = createHmac('sha256', 'WebAppData').update(env.SHIRIN_USER_BOT_TOKEN).digest();
+  const secret = createHmac('sha256', 'WebAppData').update(env['SHIRIN_' + role.toUpperCase() + '_BOT_TOKEN']).digest();
   values.hash = createHmac('sha256', secret).update(Object.keys(values).sort().map(key => key + '=' + values[key]).join('\n')).digest('hex');
   return '#tgWebAppData=' + encodeURIComponent(new URLSearchParams(values).toString());
 }
@@ -32,6 +32,7 @@ test('mobile mixed cart, selected client, confirmed point, server quote and orde
   await page.getByRole('link', { name: 'Корзина · 5' }).click();
   await expect(page.getByText('306 000 UZS', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Оформить заказ' }).click();
+  await page.getByRole('textbox', { name: 'Название, код, телефон или адрес' }).fill('DEMO-STORE');
   await page.getByRole('button', { name: /Демо магазин/ }).click();
   await expect(page.getByLabel('Название магазина')).toHaveValue('Демо магазин');
   await expect(page.getByLabel('Телефон', { exact: true })).toHaveValue('+998900000001');
@@ -62,7 +63,7 @@ test('mobile mixed cart, selected client, confirmed point, server quote and orde
 
 test('admin catalog edit, client, Excel preview and language', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 980 });
-  await page.goto(admin + '/shirin/products' + login(101));
+  await page.goto(admin + '/shirin/products' + login(101, 'admin'));
   await expect(page.getByRole('heading', { name: 'Товары', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Изменить', exact: true }).first().click();
   await expect(page.getByLabel('Артикул (SKU)')).toBeDisabled();
@@ -116,7 +117,7 @@ test('nested refresh, unavailable geolocation, own draft and API 404', async ({ 
 test('independent superadmin overview, permissions, payment and logout', async ({ page, request }) => {
   await page.setViewportSize({ width: 1440, height: 980 });
   await page.route('https://telegram.org/js/telegram-web-app.js', route => route.fulfill({ contentType: 'application/javascript', body: '' }));
-  await page.goto(superadmin + '/shirin/superadmin/' + login(101));
+  await page.goto(superadmin + '/shirin/superadmin/' + login(101, 'superadmin'));
   await expect(page.getByRole('heading', { name: 'Обзор', exact: true })).toBeVisible();
   await expect(page.locator('.admin-heading small')).toContainText('Суперадмин Shirin');
   await expect(page.getByText('Товаров в продаже', { exact: true })).toBeVisible();
@@ -167,10 +168,28 @@ test('independent superadmin overview, permissions, payment and logout', async (
 test('staff cannot enter independent superadmin or load its protected data', async ({ page }) => {
   const protectedCalls: string[] = [];
   page.on('request', request => { if (request.url().includes('/api/access') || request.url().includes('/superadmin/overview')) protectedCalls.push(request.url()); });
-  await page.goto(superadmin + '/shirin/superadmin/access' + login(202));
-  await expect(page.getByRole('heading', { name: 'Доступ только для суперадминистратора Shirin' })).toBeVisible();
+  await page.goto(superadmin + '/shirin/superadmin/access' + login(202, 'superadmin'));
+  await expect(page.getByText('Недостаточно прав.', { exact: true })).toBeVisible();
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   expect(protectedCalls).toEqual([]);
   const denied = await page.request.get(superadmin + '/shirin/api/access');
   expect(denied.status()).toBe(401);
+});
+
+test('admin logout preserves the independent superadmin session on the same host', async ({ page, context }) => {
+  await page.goto(admin + '/shirin/products' + login(101, 'admin'));
+  await expect(page.getByRole('heading', { name: 'Товары', exact: true })).toBeVisible();
+  const other = await context.newPage();
+  const superadminOrigin = built ? admin : superadmin;
+  await other.goto(superadminOrigin + '/shirin/superadmin/' + login(101, 'superadmin'));
+  await expect(other.getByRole('heading', { name: 'Обзор', exact: true })).toBeVisible();
+  const cookies = await context.cookies();
+  expect(cookies.some(cookie => cookie.name === 'shirin_admin_refresh_token')).toBe(true);
+  expect(cookies.some(cookie => cookie.name === 'shirin_superadmin_refresh_token')).toBe(true);
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Админка Shirin', exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Админка Shirin', exact: true })).toBeVisible();
+  await other.reload();
+  await expect(other.getByRole('heading', { name: 'Обзор', exact: true })).toBeVisible();
 });

@@ -15,12 +15,14 @@ make dev-superadmin
 
 ## Вход настоящего суперадминистратора
 
-1. Настройте собственный бот Shirin и HTTPS по [telegram.md](telegram.md) и [deployment.md](deployment.md).
-2. Добавьте нужные Telegram ID в `SHIRIN_SUPERADMIN_ALLOWED_IDS`, например `123456789,987654321`. Пустой список закрывает доступ всем. После изменения перезапустите backend и бот.
+1. Заполните `SHIRIN_SUPERADMIN_BOT_TOKEN` token отдельного superadmin/ops bot Shirin. User и admin tokens остаются в своих полях. Настройте HTTPS по [telegram.md](telegram.md) и [deployment.md](deployment.md).
+2. Добавьте нужные Telegram ID в `SHIRIN_SUPERADMIN_ALLOWED_IDS`, например `123456789,987654321`. Пустой список закрывает доступ всем. После изменения перезапустите Shirin через `./up.sh`.
 3. Укажите `SHIRIN_SUPERADMIN_APP_URL`; подготовленный адрес — `https://adminmarket.wekulcha.online/shirin/superadmin/`.
-4. Отправьте `/start` боту Shirin. Разрешённый пользователь увидит отдельную кнопку «Суперадмин Shirin». Откройте её: backend проверит initData этого бота и выдаст собственную сессию Shirin.
+4. Отправьте `/start` **superadmin/ops bot Shirin**. Разрешённый пользователь увидит кнопку «Суперадмин Shirin». Откройте её: `/shirin/api/auth/telegram/superadmin` проверит initData по `SHIRIN_SUPERADMIN_BOT_TOKEN`, затем allowlist и выдаст собственную сессию Shirin.
 
-Пароль и аккаунт Market для входа не используются. Backend проверяет allowlist при каждом запросе, включая `/superadmin/me`, `/superadmin/overview` и `/access`. Выдача обоих прав сотрудника не делает его суперадминистратором. Кнопка «Выйти» отзывает refresh-сессию и очищает токен, данные запросов и подписанный hash этой страницы.
+Контейнер `superadmin_bot` запускается вместе с `user_bot` и `admin_bot`. Проверить его: `docker compose logs --tail=80 superadmin_bot`. Для ручного тестового запуска из `backend`: `../.venv/bin/python -m app.bot --role superadmin`.
+
+Пароль и аккаунт Market для входа не используются. Backend проверяет allowlist при каждом запросе, включая `/superadmin/me`, `/superadmin/overview` и `/access`. InitData user/admin bots не подходит для входа в суперадминку. Выдача обоих прав сотрудника не делает его суперадминистратором. Кнопка «Выйти» отзывает refresh-сессию этой панели и очищает токен, данные запросов и подписанный hash этой страницы.
 
 ## Права сотрудников
 

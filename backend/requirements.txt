@@ -10,4 +10,4 @@ python-multipart>=0.0.18,<1
 aiofiles>=24.1,<26
 boto3>=1.35,<2
 Pillow>=11,<13
-aiogram>=3.13,<4
+aiogram[proxy]>=3.13,<4

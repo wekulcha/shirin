@@ -4,7 +4,6 @@ from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from aiogram import Bot
 from aiogram.types import FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import or_, select, update
 
@@ -13,6 +12,7 @@ from app.database import async_session
 from app.i18n import translate
 from app.models import Media, Outbox
 from app.models.business import now
+from app.services.telegram_client import create_bot
 
 
 def money(value) -> str:
@@ -68,7 +68,7 @@ def chunks(text: str, limit: int = 3500) -> list[str]:
 
 class TelegramTransport:
     def __init__(self):
-        self.bot = Bot(get_settings().user_bot_token)
+        self.bot = create_bot("admin")
 
     async def send(self, payload: dict, part: str, index: int) -> int:
         settings = get_settings()
@@ -103,7 +103,7 @@ class TelegramTransport:
 
 async def process_outbox_once(transport=None) -> bool:
     settings = get_settings()
-    if transport is None and (not settings.user_bot_token or not settings.work_group_id):
+    if transport is None and (not settings.admin_bot_token or not settings.work_group_id):
         return False
     async with async_session() as db:
         due = or_(Outbox.state == "PENDING", (Outbox.state == "SENDING") & (Outbox.lease_until < now()))
