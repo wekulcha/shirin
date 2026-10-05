@@ -85,15 +85,41 @@ docker network connect shirin_gateway ИМЯ_КОНТЕЙНЕРА_CADDY
 
 Если указать `SHIRIN_SHARED_GATEWAY_CONTAINER`, `up.sh` подключит этот уже работающий контейнер к сети Shirin; повторный запуск не добавляет дубликат. Пустое значение не меняет сети соседних контейнеров. Скрипт не переписывает действующий Caddyfile.
 
-В `deploy/Caddyfile.routes.example` подготовлены маршруты Shirin. В уже существующие блоки `market.wekulcha.ru` и `adminmarket.wekulcha.online` перенесите только `handle /shirin…` перед корневым proxy. Существующие root handlers оставьте. Полная замена действующего Caddyfile примером нарушит корневые маршруты Market.
+В `deploy/Caddyfile.routes.example` подготовлены два блока доменов с маршрутами Shirin и корневым proxy в соответствующую панель Market. Замените ими **только существующие блоки** `market.wekulcha.ru` и `adminmarket.wekulcha.online`. Остальные домены, глобальные настройки и дополнительные маршруты действующего файла сохраните. Если в этих двух блоках уже есть собственные дополнительные правила, перенесите `handle /shirin…` и сохраните их вместе с корневым fallback `handle`. Не добавляйте вторые блоки с теми же доменами и не заменяйте весь Caddyfile этим примером.
+
+На текущей ВМ публичные 80/443 занимает `kulcha-gateway`; `kulcha-market-gateway` на 18080/18443 не обслуживает обычные HTTPS-адреса. В `.env` Shirin задайте `SHIRIN_SHARED_GATEWAY_CONTAINER=kulcha-gateway`, чтобы `up.sh` восстанавливал подключение при следующих запусках. Для уже запущенных контейнеров достаточно `docker network connect shirin_gateway kulcha-gateway` (если сеть уже подключена, повторять команду не нужно).
+
+Общий gateway должен обращаться к контейнерам по полным именам. В оставшихся блоках Kulcha используйте `kulcha-backend:8000`, `kulcha-user-panel:80`, `kulcha-admin-panel:80`, `kulcha-superadmin-panel:80` вместо `backend`, `user_panel`, `admin_panel`, `superadmin_panel`: такие Compose service aliases повторяются в сетях разных проектов.
+
+Найдите действующий файл и посмотрите его до изменения:
+
+```bash
+docker inspect kulcha-gateway --format '{{range .Mounts}}{{if eq .Destination "/etc/caddy/Caddyfile"}}{{.Source}}{{end}}{{end}}'
+docker exec kulcha-gateway cat /etc/caddy/Caddyfile
+```
+
+Сделайте резервную копию найденного файла и редактируйте его на хосте. Для file bind mount сохраняйте изменение в тот же файл, чтобы контейнер видел новое содержимое. При типовой установке это `~/kulcha/deploy/Caddyfile`.
 
 До reload проверьте объединённый файл:
 
 ```bash
-caddy validate --config /path/to/merged/Caddyfile --adapter caddyfile
+docker exec kulcha-gateway caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+# Выполнить только после успешной проверки:
+docker exec kulcha-gateway caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 ```
 
 DNS для этого сценария менять не нужно. Общий gateway маршрутизирует HTTP; данные, сессии и права принадлежат Shirin, связь с backend Market удалена.
+
+Проверка опубликованного приложения:
+
+```bash
+curl -i https://market.wekulcha.ru/shirin/api/health
+curl -i https://adminmarket.wekulcha.online/shirin/api/health
+```
+
+Оба адреса должны возвращать JSON `{"status":"ok","project":"shirin"}`. HTML с `<title>Kulcha Market</title>` вместо JSON означает, что запрос попал в корневую панель Market: маршруты Shirin ещё не применены к публичному gateway. React-сообщение `Unexpected Application Error! 404 Not Found` при открытии `/shirin/` в таком случае выдаёт роутер Market. Ошибка 502 после добавления маршрутов означает недоступность upstream; проверьте подключение `kulcha-gateway` к `shirin_gateway` и состояние backend/панелей.
+
+После правильного ответа health откройте `/shirin/` и `/shirin/superadmin/` на нужных доменах: HTML должен содержать название «Ширин», ссылки на assets — префикс соответствующей панели. Затем закройте старое окно Mini App, отправьте боту `/start` и откройте новую кнопку.
 
 ## Telegram и хранилище
 

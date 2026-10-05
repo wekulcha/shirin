@@ -119,9 +119,9 @@ echo "Applying Shirin database migrations..."
 # PostgreSQL and migrations are ready. Start every application service together.
 "${compose[@]}" up -d --build --no-deps "${app_services[@]}"
 
+gateway_network="${SHIRIN_GATEWAY_NETWORK:-$(read_env_value SHIRIN_GATEWAY_NETWORK)}"
+gateway_network="${gateway_network:-shirin_gateway}"
 if [[ -n "$shared_container" ]]; then
-  gateway_network="${SHIRIN_GATEWAY_NETWORK:-$(read_env_value SHIRIN_GATEWAY_NETWORK)}"
-  gateway_network="${gateway_network:-shirin_gateway}"
   attached="false"
   while IFS= read -r network; do
     if [[ "$network" == "$gateway_network" ]]; then
@@ -133,6 +133,13 @@ if [[ -n "$shared_container" ]]; then
     docker network connect "$gateway_network" "$shared_container"
   fi
   echo "Shared gateway '$shared_container' is connected to '$gateway_network'."
+elif [[ "$gateway_mode" == "shared" ]]; then
+  echo "Mini App publication requires connecting the public gateway to '$gateway_network'."
+  echo "Set SHIRIN_SHARED_GATEWAY_CONTAINER to that container name in .env, or connect it manually."
 fi
 
 "${compose[@]}" ps
+if [[ "$gateway_mode" == "shared" ]]; then
+  echo "Apply deploy/Caddyfile.routes.example to the public gateway; ./up.sh does not edit its Caddyfile."
+  echo "Verify /shirin/api/health on both panel domains: it must return Shirin JSON, not Market HTML."
+fi

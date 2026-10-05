@@ -1,7 +1,11 @@
-# Merge these handles into the existing domain blocks, BEFORE their root proxy.
-# Keep the /shirin prefix; backend routes already contain it.
-# The final 404 is only for a standalone gateway; keep the existing root handler
-# when adding Shirin routes to a gateway that already serves other applications.
+# Replace the TWO corresponding Market site blocks in the shared Caddyfile.
+# Keep every other site, global setting and custom route in that file.
+# These fallback upstreams match the existing kulcha-market containers.
+# Keep the /shirin prefix; backend and panel routes already contain it.
+# Connect the public gateway (kulcha-gateway on the current VM) to shirin_gateway.
+# Use full container names for Kulcha upstreams too: service aliases such as
+# backend or user_panel can identify containers from multiple attached networks.
+# A dedicated Shirin VM uses Caddyfile.cloud instead of this shared example.
 market.wekulcha.ru {
 	encode zstd gzip
 	request_body {
@@ -23,7 +27,7 @@ market.wekulcha.ru {
 		reverse_proxy shirin-user-panel:80
 	}
 	handle {
-		respond "Not Found" 404
+		reverse_proxy kulcha-market-user-panel:80
 	}
 }
 adminmarket.wekulcha.online {
@@ -50,6 +54,6 @@ adminmarket.wekulcha.online {
 		reverse_proxy shirin-admin-panel:80
 	}
 	handle {
-		respond "Not Found" 404
+		reverse_proxy kulcha-market-admin-panel:80
 	}
 }
