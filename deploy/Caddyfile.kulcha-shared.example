@@ -1,11 +1,31 @@
-# Replace the TWO corresponding Market site blocks in the shared Caddyfile.
-# Keep every other site, global setting and custom route in that file.
-# These fallback upstreams match the existing kulcha-market containers.
-# Keep the /shirin prefix; backend and panel routes already contain it.
-# Connect the public gateway (kulcha-gateway on the current VM) to shirin_gateway.
-# Use full container names for Kulcha upstreams too: service aliases such as
-# backend or user_panel can identify containers from multiple attached networks.
-# A dedicated Shirin VM uses Caddyfile.cloud instead of this shared example.
+# Complete replacement for the kulcha-gateway Caddyfile supplied on 2026-10-05.
+# Host path on that VM: /opt/kulcha/app/deploy/Caddyfile.
+# Preserve any additional server routes if the active file changes later.
+# The gateway also needs the kulcha-market_default and shirin_gateway networks.
+{
+	email {$ACME_EMAIL}
+}
+
+{$API_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy kulcha-backend:8000
+}
+
+{$USER_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy kulcha-user-panel:80
+}
+
+{$ADMIN_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy kulcha-admin-panel:80
+}
+
+{$SUPERADMIN_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy kulcha-superadmin-panel:80
+}
+
 market.wekulcha.ru {
 	encode zstd gzip
 	request_body /shirin/* {
@@ -30,6 +50,12 @@ market.wekulcha.ru {
 		reverse_proxy kulcha-market-user-panel:80
 	}
 }
+
+apimarket.wekulcha.ru {
+	encode zstd gzip
+	reverse_proxy kulcha-market-backend:8000
+}
+
 adminmarket.wekulcha.online {
 	encode zstd gzip
 	request_body /shirin/* {
@@ -56,4 +82,9 @@ adminmarket.wekulcha.online {
 	handle {
 		reverse_proxy kulcha-market-admin-panel:80
 	}
+}
+
+supmarket.wekulcha.online {
+	encode zstd gzip
+	reverse_proxy kulcha-market-superadmin-panel:80
 }

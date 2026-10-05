@@ -13,6 +13,7 @@
 | `SHIRIN_BUILT_PREVIEW=1 npx playwright test` через локальный Caddy | **6 passed** |
 | Caddy local/routes/cloud: adapt и редиректы | Каждый redirect получает 308 и правильный Location; четыре локальных корневых URL проверены HTTP-запросами |
 | Общий Caddy с fallback в Market | **18 HTTP-проверок upstream/сохранения пути и 3 редиректа**; корни Market сохранены, API и три панели Shirin выбирают свои upstream. Временные локальные HTTP-сервисы, Caddy 2.8.4 |
+| Полный Caddyfile подтверждённой ВМ | **24 HTTP-проверки и 3 редиректа**; все восемь сайтов Kulcha/Market сохранены. Production adapt с подстановкой доменов проходит; upstream используют полные имена контейнеров |
 | Compose с синтетической `.env`, shared/cloud | Конфигурации проходят проверку |
 | Bash и startup/shutdown сценарии с подменённым Docker | Миграции до runtime, остановка при ошибке, сохранение volumes, подключение gateway, отказ при пустых/одинаковых токенах |
 | Telegram getMe/getWebhookInfo трёх предоставленных ботов | Имена подтверждены; webhook отсутствуют, polling совместим. Сообщения не отправлялись |

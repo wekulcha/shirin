@@ -98,7 +98,27 @@ docker inspect kulcha-gateway --format '{{range .Mounts}}{{if eq .Destination "/
 docker exec kulcha-gateway cat /etc/caddy/Caddyfile
 ```
 
-Сделайте резервную копию найденного файла и редактируйте его на хосте. Для file bind mount сохраняйте изменение в тот же файл, чтобы контейнер видел новое содержимое. При типовой установке это `~/kulcha/deploy/Caddyfile`.
+Сделайте резервную копию найденного файла и редактируйте его на хосте. Для file bind mount сохраняйте изменение в тот же файл, чтобы контейнер видел новое содержимое. На текущей ВМ подтверждён путь `/opt/kulcha/app/deploy/Caddyfile`.
+
+Для полного Caddyfile, предоставленного 5 октября 2026, готова замена `deploy/Caddyfile.kulcha-shared.example`. Она сохраняет четыре домена Kulcha и четыре домена Market, добавляет три панели/API Shirin, заменяет неоднозначные upstream aliases Kulcha на полные имена контейнеров. Ограничение upload 9 MB действует только под `/shirin/*`. Пример из двух блоков `Caddyfile.routes.example` предназначен для ручного объединения, полный файл — для этой конкретной конфигурации ВМ.
+
+Если действующий файл по-прежнему совпадает с предоставленным, примените полный файл из актуального checkout Shirin. Сначала проверяется временная копия в контейнере:
+
+```bash
+cd ~/shirin
+docker cp deploy/Caddyfile.kulcha-shared.example kulcha-gateway:/tmp/Caddyfile.shirin
+docker exec kulcha-gateway caddy validate --config /tmp/Caddyfile.shirin --adapter caddyfile
+```
+
+После `Valid configuration` сохраните backup и запишите содержимое в существующий bind-mounted файл, затем reload:
+
+```bash
+sudo cp -p /opt/kulcha/app/deploy/Caddyfile "/opt/kulcha/app/deploy/Caddyfile.bak.$(date +%Y%m%d-%H%M%S)"
+sudo tee /opt/kulcha/app/deploy/Caddyfile < deploy/Caddyfile.kulcha-shared.example > /dev/null
+docker exec kulcha-gateway caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+```
+
+После reload подключите `kulcha-gateway` к `shirin_gateway`, если он ещё не подключён. Неоднозначные upstream заменяются до добавления новой сети. Ошибка `endpoint ... already exists` означает, что контейнер уже находится в сети; другие ошибки подключения нужно устранить. После подключения выполните проверки health ниже.
 
 До reload проверьте объединённый файл:
 
