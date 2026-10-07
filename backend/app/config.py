@@ -3,12 +3,15 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://shirin:shirin@localhost:5444/shirin"
+    database_pool_size: int = Field(2, gt=0)
+    database_max_overflow: int = Field(1, ge=0)
+    database_pool_timeout: float = Field(30, gt=0)
     environment: str = "production"
     user_bot_token: str = ""
     admin_bot_token: str = ""

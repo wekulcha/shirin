@@ -1,0 +1,27 @@
+# Optional on shared/small VMs: ./up.sh --compact
+# Set SHIRIN_COMPACT_WORKERS=true in .env to persist this choice.
+services:
+  worker:
+    profiles: [separate-workers]
+  user_bot:
+    profiles: [separate-workers]
+  admin_bot:
+    profiles: [separate-workers]
+  superadmin_bot:
+    profiles: [separate-workers]
+  workers:
+    image: ${SHIRIN_BACKEND_IMAGE:-shirin-backend:latest}
+    container_name: shirin-workers
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SHIRIN_DATABASE_POOL_SIZE: ${SHIRIN_COMPACT_DATABASE_POOL_SIZE:-4}
+      SHIRIN_DATABASE_MAX_OVERFLOW: ${SHIRIN_COMPACT_DATABASE_MAX_OVERFLOW:-2}
+    command: [python, -m, app.workers]
+    volumes: [media_data:/app/uploads]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+    logging:
+      driver: json-file
+      options:
+        max-size: ${SHIRIN_LOG_MAX_SIZE:-10m}
+        max-file: '${SHIRIN_LOG_MAX_FILES:-3}'

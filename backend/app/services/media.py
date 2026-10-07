@@ -1,10 +1,10 @@
 import asyncio
 import io
 import secrets
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import HTTPException
-from PIL import Image, UnidentifiedImageError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -13,23 +13,36 @@ from app.models.business import Permission, now
 from app.services.access import Actor
 from app.services.object_storage import ObjectStorageNotConfiguredError, get_object_storage
 
+# Keep decode concurrency bounded even if an HTTP request is cancelled while
+# Pillow is still running. Cancelling an asyncio task does not stop its thread.
+_image_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="shirin-image")
+
 
 def checked_image(content: bytes) -> tuple[bytes, str, str]:
     if not content or len(content) > get_settings().max_upload_bytes:
         raise HTTPException(413, "file_too_large")
+    from PIL import Image, UnidentifiedImageError
+
     try:
         with Image.open(io.BytesIO(content)) as im:
             if im.format not in ("JPEG", "PNG", "WEBP") or im.width * im.height > 30_000_000:
                 raise HTTPException(422, "invalid_image")
             im.verify()
         with Image.open(io.BytesIO(content)) as im:
-            im = im.convert("RGB")
+            # JPEG can decode at reduced resolution. Resize other formats before
+            # allocating the RGB copy, retaining the original pixel limit above.
+            im.draft("RGB", (2400, 2400))
             im.thumbnail((2400, 2400))
-            output = io.BytesIO()
-            im.save(output, "JPEG", quality=90)
-            return output.getvalue(), "image/jpeg", ".jpg"
+            with im.convert("RGB") as rgb:
+                output = io.BytesIO()
+                rgb.save(output, "JPEG", quality=90)
+                return output.getvalue(), "image/jpeg", ".jpg"
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError, ValueError):
         raise HTTPException(422, "invalid_image") from None
+
+
+async def checked_image_async(content: bytes) -> tuple[bytes, str, str]:
+    return await asyncio.get_running_loop().run_in_executor(_image_executor, checked_image, content)
 
 
 async def upload_media(db: AsyncSession, actor: Actor, content: bytes, kind: str) -> Media:
@@ -37,7 +50,7 @@ async def upload_media(db: AsyncSession, actor: Actor, content: bytes, kind: str
         actor.require(Permission.CAN_EDIT_MENU)
     if kind not in ("product", "store"):
         raise HTTPException(422, "invalid_image")
-    content, content_type, extension = await asyncio.to_thread(checked_image, content)
+    content, content_type, extension = await checked_image_async(content)
     mid = secrets.token_hex(20)
     storage_path = ""
     if kind == "product":

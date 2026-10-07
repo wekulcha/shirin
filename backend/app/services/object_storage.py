@@ -7,10 +7,6 @@ from functools import lru_cache
 from typing import BinaryIO
 from urllib.parse import quote
 
-import boto3
-from botocore.config import Config
-from botocore.exceptions import ClientError
-
 from app.config import Settings, get_settings
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/jpg"}
@@ -41,6 +37,9 @@ class ObjectStorageService:
         ]
         if missing:
             raise ObjectStorageNotConfiguredError(f"Object Storage is not configured. Missing: {', '.join(missing)}")
+
+        import boto3
+        from botocore.config import Config
 
         session = boto3.session.Session(
             aws_access_key_id=settings.object_storage_access_key_id,
@@ -98,6 +97,8 @@ class ObjectStorageService:
         return self.public_url(key)
 
     async def object_exists(self, key: str) -> bool:
+        from botocore.exceptions import ClientError
+
         def _head() -> bool:
             try:
                 self._client.head_object(Bucket=self._bucket, Key=key)

@@ -56,6 +56,7 @@ nano .env
 | `SHIRIN_SHARED_GATEWAY` | `true` |
 | `SHIRIN_GATEWAY_NETWORK` | `shirin_gateway`, если собственное имя сети не задано |
 | `SHIRIN_SHARED_GATEWAY_CONTAINER` | Имя уже работающего gateway-контейнера; можно оставить пустым и подключить сеть вручную |
+| `SHIRIN_COMPACT_WORKERS` | `true` для экономии памяти: три бота и уведомления в одном процессе; по умолчанию `false` |
 | `SHIRIN_BOT_MODE` | `polling` для этих новых ботов; если настроен webhook, см. [telegram.md](telegram.md) |
 | `SHIRIN_TELEGRAM_PROXY_URL` | Используемый на ВМ Telegram HTTP proxy, если требуется; иначе пусто |
 | `SHIRIN_WORK_GROUP_ID` | ID рабочей группы; `0` для запуска без отправки уведомлений |
@@ -82,9 +83,13 @@ docker compose ps -a
 docker compose logs --tail=80 backend worker user_bot admin_bot superadmin_bot
 ```
 
-Если Docker требует sudo, выполняйте `sudo ./up.sh --shared`. Скрипт использует `.env`, проверяет Compose, ждёт PostgreSQL, применяет миграции и запускает три панели/бота и остальные сервисы. `migrate` должен завершиться с кодом 0. Если указан `SHIRIN_SHARED_GATEWAY_CONTAINER`, скрипт подключает этот действующий контейнер к сети Shirin; Caddyfile автоматически не переписывается.
+Если Docker требует sudo, выполняйте `sudo ./up.sh --shared`. Скрипт использует `.env`, проверяет Compose, последовательно собирает backend и три панели, затем ждёт PostgreSQL, применяет миграции и запускает сервисы. `migrate` должен завершиться с кодом 0. Если указан `SHIRIN_SHARED_GATEWAY_CONTAINER`, скрипт подключает этот действующий контейнер к сети Shirin; Caddyfile автоматически не переписывается.
 
 Названия контейнеров ботов: `shirin-user-bot`, `shirin-admin-bot`, `shirin-superadmin-bot`. Для обновления повторяйте `git pull --ff-only`, затем `./up.sh`; для остановки только Shirin используйте `./down.sh`. База и фотографии сохраняются в volumes.
+
+На ВМ с небольшим запасом RAM используйте `SHIRIN_COMPACT_WORKERS=true` в существующей `.env` и `./up.sh --shared --compact`. Три бота и уведомления будут работать в одном контейнере `shirin-workers`; его журнал: `docker logs --tail=80 shirin-workers`. При первом переходе нужна сборка. Повторный запуск уже собранной версии возможен через `./up.sh --shared --no-build`; этот флаг не применяет изменения исходников после `git pull`.
+
+По предоставленному замеру от 7 октября одни контейнеры Kulcha и Shirin потребляли около 1,67 GiB, а Docker видел около 4 ГБ памяти ВМ. Для исходной ВМ с 2 ГБ запас под ОС и сборку слишком мал. Причина перезагрузок пока не подтверждена: [измерения, ограничения компактного режима и дальнейшая диагностика](architecture-and-resources.md).
 
 ## 4. Маршруты в существующем Caddy
 

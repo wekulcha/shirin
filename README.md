@@ -60,7 +60,18 @@ docker compose logs --tail=80 user_bot admin_bot superadmin_bot
 ./down.sh
 ```
 
-Скрипт запуска применяет миграции и поднимает три бота, три панели, backend и worker. На существующей ВМ с Market/KULCHA используется общий gateway; маршруты `/shirin/` добавляются в его Caddy по [инструкции развёртывания](docs/deployment.md). Рабочую `.env` сохраняйте: в ней остаются прежние пароль БД, домены, группа, proxy и Object Storage, к ним добавляются два недостающих token.
+Скрипт сначала собирает один общий backend image и по очереди три панели, затем применяет миграции и запускает сервисы. Для повторного запуска уже собранной версии есть `./up.sh --no-build`; после обновления исходников нужна обычная сборка через `./up.sh`.
+
+На ВМ с небольшим объёмом памяти можно объединить три бота и worker уведомлений в один процесс:
+
+```bash
+./up.sh --compact
+docker logs --tail=80 shirin-workers
+```
+
+Для сохранения этого режима при следующих запусках добавьте `SHIRIN_COMPACT_WORKERS=true` в существующую `.env`. Три токена, роли и панели сохраняются; вместо четырёх контейнеров ботов/worker работает один `shirin-workers`. API остаётся отдельным. Фактическую экономию нужно измерить на ВМ. [Аудит ресурсов и переключение режимов](docs/architecture-and-resources.md).
+
+На существующей ВМ с Market/KULCHA используется общий gateway; маршруты `/shirin/` добавляются в его Caddy по [инструкции развёртывания](docs/deployment.md). Рабочую `.env` сохраняйте: в ней остаются прежние пароль БД, домены, группа, proxy, Object Storage и три токена Shirin.
 
 ## Реализованные сценарии
 
@@ -98,10 +109,11 @@ TEST_DATABASE_URL=postgresql+asyncpg://TEST_USER@127.0.0.1:5544/shirin_test .ven
 - [Telegram, polling/webhook, группа](docs/telegram.md).
 - [Отдельная суперадминка: вход, права и удаление интеграции](docs/superadmin.md).
 - [Compose, Caddy и два существующих домена](docs/deployment.md).
+- [Архитектура, память ВМ и компактный режим](docs/architecture-and-resources.md).
 - [Яндекс Облако: существующая ВМ, .env, три бота и запуск; отдельная ВМ при необходимости](docs/yandex-cloud.md).
 - [Этапы реализации](docs/implementation-progress.md).
 
-Mini App: `https://market.wekulcha.ru/shirin/`; панель сотрудников: `https://adminmarket.wekulcha.online/shirin/`; суперадминка: `https://adminmarket.wekulcha.online/shirin/superadmin/`. Общий домен может обслуживаться gateway, а данные и авторизация принадлежат Shirin. На production приложение ещё не размещено. Реальные Telegram/S3/HTTPS проверки требуют соответствующего тестового окружения; Docker daemon здесь выключен.
+Mini App: `https://market.wekulcha.ru/shirin/`; панель сотрудников: `https://adminmarket.wekulcha.online/shirin/`; суперадминка: `https://adminmarket.wekulcha.online/shirin/superadmin/`. Общий домен обслуживается gateway, а данные и авторизация принадлежат Shirin. По предоставленному 7 октября выводу Shirin запущен на ВМ; подготовленные изменения требуют отдельного обновления на сервере. Выполненные локальные проверки и их ограничения перечислены в [результатах](docs/test-results.md).
 
 Приватный репозиторий `wekulcha/shirin` создан пользователем, `origin` уже настроен. После входа в GitHub под аккаунтом с доступом отправьте текущую ветку:
 

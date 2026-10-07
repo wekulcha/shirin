@@ -1,10 +1,15 @@
 # Additional gateway for a NEW dedicated Shirin VM. Run from the repository root:
-# docker compose -f docker-compose.yml -f deploy/docker-compose.cloud.yml up -d --build
+# ./up.sh --cloud
 services:
   gateway:
     image: caddy:2-alpine
     container_name: shirin-gateway
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: ${SHIRIN_LOG_MAX_SIZE:-10m}
+        max-file: '${SHIRIN_LOG_MAX_FILES:-3}'
     environment:
       SHIRIN_PUBLIC_HOST: ${SHIRIN_PUBLIC_HOST:?Set SHIRIN_PUBLIC_HOST to the Mini App hostname}
       SHIRIN_ADMIN_HOST: ${SHIRIN_ADMIN_HOST:?Set SHIRIN_ADMIN_HOST to the admin hostname}

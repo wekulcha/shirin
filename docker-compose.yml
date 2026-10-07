@@ -1,7 +1,15 @@
 name: shirin
+x-backend: &backend-image
+  image: ${SHIRIN_BACKEND_IMAGE:-shirin-backend:latest}
+x-logging: &bounded-logs
+  driver: json-file
+  options:
+    max-size: ${SHIRIN_LOG_MAX_SIZE:-10m}
+    max-file: '${SHIRIN_LOG_MAX_FILES:-3}'
 services:
   postgres:
     image: postgres:16-alpine
+    logging: *bounded-logs
     restart: unless-stopped
     environment:
       POSTGRES_DB: shirin
@@ -14,12 +22,15 @@ services:
       timeout: 5s
       retries: 20
   migrate:
-    build: {context: ., dockerfile: deploy/backend.Dockerfile}
+    <<: *backend-image
+    logging: *bounded-logs
     env_file: .env
     command: [alembic, upgrade, head]
     depends_on: {postgres: {condition: service_healthy}}
   backend:
+    <<: *backend-image
     build: {context: ., dockerfile: deploy/backend.Dockerfile}
+    logging: *bounded-logs
     container_name: shirin-backend
     restart: unless-stopped
     env_file: .env
@@ -28,14 +39,16 @@ services:
     expose: ['8000']
     networks: [default, gateway]
   worker:
-    build: {context: ., dockerfile: deploy/backend.Dockerfile}
+    <<: *backend-image
+    logging: *bounded-logs
     restart: unless-stopped
     env_file: .env
     command: [python, -m, app.services.notifications]
     volumes: [media_data:/app/uploads]
     depends_on: {migrate: {condition: service_completed_successfully}}
   user_bot:
-    build: {context: ., dockerfile: deploy/backend.Dockerfile}
+    <<: *backend-image
+    logging: *bounded-logs
     container_name: shirin-user-bot
     restart: unless-stopped
     env_file: .env
@@ -45,7 +58,8 @@ services:
     volumes: [media_data:/app/uploads]
     depends_on: {migrate: {condition: service_completed_successfully}}
   admin_bot:
-    build: {context: ., dockerfile: deploy/backend.Dockerfile}
+    <<: *backend-image
+    logging: *bounded-logs
     container_name: shirin-admin-bot
     restart: unless-stopped
     env_file: .env
@@ -55,7 +69,8 @@ services:
     volumes: [media_data:/app/uploads]
     depends_on: {migrate: {condition: service_completed_successfully}}
   superadmin_bot:
-    build: {context: ., dockerfile: deploy/backend.Dockerfile}
+    <<: *backend-image
+    logging: *bounded-logs
     container_name: shirin-superadmin-bot
     restart: unless-stopped
     env_file: .env
@@ -66,18 +81,21 @@ services:
     depends_on: {migrate: {condition: service_completed_successfully}}
   user_panel:
     build: {context: ., dockerfile: deploy/user-panel.Dockerfile}
+    logging: *bounded-logs
     container_name: shirin-user-panel
     restart: unless-stopped
     expose: ['80']
     networks: [default, gateway]
   admin_panel:
     build: {context: ., dockerfile: deploy/admin-panel.Dockerfile}
+    logging: *bounded-logs
     container_name: shirin-admin-panel
     restart: unless-stopped
     expose: ['80']
     networks: [default, gateway]
   superadmin_panel:
     build: {context: ., dockerfile: deploy/superadmin-panel.Dockerfile}
+    logging: *bounded-logs
     container_name: shirin-superadmin-panel
     restart: unless-stopped
     expose: ['80']

@@ -22,7 +22,7 @@ from app.schemas import ProductInput, Transition
 from app.services.access import actor_for_user
 from app.services.catalog import save_product, serialize
 from app.services.excel import apply_import, build_workbook, preview_import
-from app.services.media import attach_product_photo, checked_image, upload_media
+from app.services.media import attach_product_photo, checked_image_async, upload_media
 from app.services.notifications import chunks
 from app.services.orders import transition
 from app.services.session_auth import ensure_customer
@@ -314,7 +314,7 @@ async def uploaded_file(message: Message, bot: Bot, bot_role: str | None = None)
                     ),
                 )
             else:
-                checked, _, _ = await asyncio.to_thread(checked_image, content)
+                checked, _, _ = await checked_image_async(content)
                 media = await upload_media(db, actor, checked, "product")
                 product = await db.get(Product, state.payload["product_id"])
                 if not product or product.version != state.payload["version"]:
@@ -398,7 +398,7 @@ async def order_button(callback: CallbackQuery, bot_role: str | None = None):
 
 
 def dispatcher(bot_role: str | None = None) -> Dispatcher:
-    # Each process and each test receives a fresh router and its own role.
+    # Each dispatcher receives a fresh router and its own role, including compact mode.
     dp = Dispatcher(bot_role=role_for(bot_role))
     router = Router()
     router.message.register(start, Command("start", "help"))
@@ -416,7 +416,40 @@ def dispatcher(bot_role: str | None = None) -> Dispatcher:
     return dp
 
 
-async def run_bot(bot_role: str | None = None):
+async def poll_bot(dp: Dispatcher, bot: Bot, *, handle_signals: bool, handle_as_tasks: bool):
+    """Let aiogram stop its internal polling tasks before closing the HTTP session."""
+    started = asyncio.Event()
+
+    async def mark_started(**kwargs):
+        started.set()
+
+    dp.startup.register(mark_started)
+    polling = asyncio.create_task(
+        dp.start_polling(bot, handle_signals=handle_signals, handle_as_tasks=handle_as_tasks, close_bot_session=False),
+        name=f"shirin-polling-{bot.id}",
+    )
+    try:
+        # Cancelling start_polling directly can leave aiogram's getUpdates task alive.
+        await asyncio.shield(polling)
+    except asyncio.CancelledError:
+        if not polling.done():
+            if started.is_set():
+                stopping = asyncio.create_task(dp.stop_polling())
+                try:
+                    # A startup/shutdown failure must not leave stop_polling waiting forever.
+                    await asyncio.wait((polling, stopping), return_when=asyncio.FIRST_COMPLETED)
+                finally:
+                    if not stopping.done():
+                        stopping.cancel()
+                    await asyncio.gather(stopping, return_exceptions=True)
+            else:
+                # No internal polling tasks exist before the startup hook completes.
+                polling.cancel()
+        await asyncio.gather(polling, return_exceptions=True)
+        raise
+
+
+async def run_bot(bot_role: str | None = None, *, handle_signals: bool = True, handle_as_tasks: bool = True):
     settings = get_settings()
     role = role_for(bot_role)
     bot = create_bot(role)
@@ -424,7 +457,7 @@ async def run_bot(bot_role: str | None = None):
     try:
         if settings.bot_mode == "polling":
             # No implicit deleteWebhook/setWebhook: production lifecycle is operator-controlled.
-            await dp.start_polling(bot)
+            await poll_bot(dp, bot, handle_signals=handle_signals, handle_as_tasks=handle_as_tasks)
         elif settings.bot_mode == "webhook":
             while True:
                 async with async_session() as db:
